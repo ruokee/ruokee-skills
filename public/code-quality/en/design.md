@@ -2,7 +2,7 @@
 
 ## Original Requirements
 
-Skill exist to solve a specific problem: AI coding agents produce mediocre output when they lack domain-specific engineering judgment. Generic instructions like "follow best practices" or "write clean code" give agents nothing actionable. These Skills provide the structured knowledge that lets an agent make real engineering decisions about code quality.
+This Skill aims to solve a specific problem: AI coding agents produce mediocre output when they lack domain-specific engineering judgment. Generic instructions like "follow best practices" or "write clean code" give agents nothing actionable. These Skills provide the structured knowledge that lets an agent make real engineering decisions about code quality.
 
 The core requirements:
 
