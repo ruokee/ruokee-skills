@@ -1,0 +1,4 @@
+interface:
+  display_name: "Naming Guide"
+  short_description: "Explore names and record user decisions"
+  default_prompt: "Use $naming-guide to explore naming directions, compare candidates neutrally, and maintain an append-only naming record."

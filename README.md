@@ -8,12 +8,12 @@ Ruokee 的个人 Skills 工作仓库。
 
 ```text
 public/
-experimental/
+experimential/
 third-party/
 ```
 
 - `public/`：自研且已经稳定到可以对外发布的 Skills。
-- `experimental/`：自研或改造中、尚未正式可用的 Skills。
+- `experimential/`：自研或改造中、尚未正式可用的 Skills。
 - `third-party/`：外部引入的 Skills。通常只保留极简 Workspace，并在 `README.md` 中说明来源和选用原因。
 
 ## Workspace 结构
