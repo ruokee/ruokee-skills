@@ -24,4 +24,4 @@ Route to the document that matches the signal you are seeing in the code.
 
 For SOLID's dependency-direction principle there are two views: [solid.md](./solid.md) covers it as one of the five, and [dependency-inversion.md](./dependency-inversion.md) goes deeper on DIP and dependency injection in Python. Read both when wiring up external dependencies.
 
-Concrete design patterns (Factory, Strategy, Observer, Adapter, and so on) live under `../design-patterns/`. This directory is about when to abstract, when to wait, where responsibility belongs, and how to keep change cheap, not about specific named structures.
+Concrete design patterns (Factory, Strategy, Observer, Adapter, and so on) live under `references/design-patterns/`. This directory is about when to abstract, when to wait, where responsibility belongs, and how to keep change cheap, not about specific named structures.

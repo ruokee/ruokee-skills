@@ -33,7 +33,7 @@ structural change into the green step where behavior is not yet stable.
 - **A behavior specification.** The test suite documents what the code is supposed to do, in
   executable form that cannot drift out of date silently.
 - **Regression protection.** Once a behavior is pinned by a test, future changes that break it
-  fail loudly. This protection is what makes aggressive [refactoring](../refactoring/index.md)
+  fail loudly. This protection is what makes aggressive [refactoring](references/refactoring/index.md)
   and [YAGNI](./yagni.md) safe — you can defer abstraction and reshape later without fear.
 
 ## When TDD is valuable

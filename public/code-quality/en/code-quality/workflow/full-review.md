@@ -19,7 +19,7 @@ Before reading widely, write down:
 
 ### 2. Staged reading
 
-Load reference docs by problem domain, not all at once. Read the nearest `AGENTS.md`/`CLAUDE.md`, then preferences (`.agents/preferences/code-quality.md` or `.../code-quality/index.md`). Pull a principle, pattern, refactoring, or paradigm doc only when a concrete signal points to it. Read code in stages — target first, then widen only as a finding requires.
+Load reference docs by problem domain, not all at once. Read the nearest `AGENTS.md`/`CLAUDE.md`, then preferences (`.agents/preferences/code-quality.md` or `.agents/preferences/code-quality/index.md`). Pull a principle, pattern, refactoring, or paradigm doc only when a concrete signal points to it. Read code in stages — target first, then widen only as a finding requires.
 
 ### 3. Systematic matrix
 

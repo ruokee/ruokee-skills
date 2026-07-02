@@ -24,15 +24,15 @@ The pattern is most valuable when the set of types is stable but the set of oper
 - Node types change frequently. Every new type forces updates to all Visitors.
 - The structure is simple enough that a single recursive function or `match`/`case` suffices.
 - Only one or two operations exist. The ceremony of accept/visit adds no clarity.
-- The language supports [pattern matching](../../../python-engineering/references/grammar/match-case.md) or [`singledispatch`](../../../python-engineering/references/stdlib/functools.md), making double dispatch unnecessary.
+- The language supports [pattern matching](python-engineering/references/grammar/match-case.md) or [`singledispatch`](python-engineering/references/stdlib/functools.md), making double dispatch unnecessary.
 - Operations do not need the full concrete type — a common interface method is enough.
 
 ## Python Alternatives
 
 Python offers lighter alternatives to the classic Visitor:
 
-- **`match`/`case` with structural patterns**: works for tagged unions, dataclass hierarchies, or typed dicts. No accept method needed. See the [pattern matching reference](../../../python-engineering/references/grammar/match-case.md).
-- **`functools.singledispatch`**: dispatch on the first argument's type. Good for single-argument operations over a closed type set. See [functools](../../../python-engineering/references/stdlib/functools.md).
+- **`match`/`case` with structural patterns**: works for tagged unions, dataclass hierarchies, or typed dicts. No accept method needed. See the [pattern matching reference](python-engineering/references/grammar/match-case.md).
+- **`functools.singledispatch`**: dispatch on the first argument's type. Good for single-argument operations over a closed type set. See [functools](python-engineering/references/stdlib/functools.md).
 - **Dictionary dispatch**: map type to handler function. Simplest form; no infrastructure.
 - **Method on node**: if operations are few and stable, put behavior directly on nodes. No pattern needed.
 

@@ -43,7 +43,7 @@ Two failure modes dominate, and both are common in agent-generated code:
 
 1. **Premature abstraction.** Unifying two coincidentally similar fragments before the variation direction is known. The result is a parametric monster. The fix when you discover this is to inline the abstraction, duplicate the code again, and wait for the real seam to reveal itself.
 
-2. **Parametric / thin-wrapper proliferation.** Extracting one or two lines into many small wrapper functions in the name of "removing duplication." This rarely hides real complexity. It adds naming burden, jump cost, deeper call stacks, and — in Python — real per-call overhead, since every call builds a frame. A wrapper that renames a single expression to a synonym is a shallow helper, not a deduplication. See `../refactoring/thin-wrapper-function.md` for how to recognize and unwind these.
+2. **Parametric / thin-wrapper proliferation.** Extracting one or two lines into many small wrapper functions in the name of "removing duplication." This rarely hides real complexity. It adds naming burden, jump cost, deeper call stacks, and — in Python — real per-call overhead, since every call builds a frame. A wrapper that renames a single expression to a synonym is a shallow helper, not a deduplication. See `references/refactoring/thin-wrapper-function.md` for how to recognize and unwind these.
 
 Before extracting a helper, ask: does it provide a stable semantic boundary, hide genuine complexity, or carry a reusable policy? If the only answer is "it's used twice," that is not yet a reason — that is what the Rule of Three is for.
 

@@ -32,4 +32,4 @@ Start with the framework if you are deciding *whether* and *how* to refactor. Go
 | Fold a function back into its callers | [inline-function.md](./inline-function.md) |
 | Relocate behavior to a better owner | [move-function.md](./move-function.md) |
 
-Smells and refactorings are two sides of one practice: a smell names the problem, a refactoring names the cure. The smell documents point to the refactorings that resolve them, and the refactoring documents note the smells that motivate them. For the principles behind these judgments — DRY, the Rule of Three, single responsibility — see `../design-principles/`.
+Smells and refactorings are two sides of one practice: a smell names the problem, a refactoring names the cure. The smell documents point to the refactorings that resolve them, and the refactoring documents note the smells that motivate them. For the principles behind these judgments — DRY, the Rule of Three, single responsibility — see `references/design-principles/`.

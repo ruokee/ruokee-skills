@@ -20,6 +20,6 @@ Route to the document that matches what you are looking at.
 | Who creates and who closes — files, locks, connections, pools | [resource-lifecycle.md](./resource-lifecycle.md) |
 | Concurrent I/O, task groups, cancellation, backpressure | [async-concurrency.md](./async-concurrency.md) |
 
-Design principles (DRY, SOLID, KISS, and so on) live under `../design-principles/`, and named structural patterns (Factory, Strategy, Observer) live under `../design-patterns/`. This directory is about the underlying execution model and where state, decisions, and side effects belong, not about specific named structures.
+Design principles (DRY, SOLID, KISS, and so on) live under `references/design-principles/`, and named structural patterns (Factory, Strategy, Observer) live under `references/design-patterns/`. This directory is about the underlying execution model and where state, decisions, and side effects belong, not about specific named structures.
 
 These paradigms are not mutually exclusive. A realistic service combines an imperative shell, a functional or data-oriented core, a state machine for lifecycle, declarative config, and structured async for I/O. Reading the right paradigm means matching each part of the system to the model that makes it cheapest to reason about.

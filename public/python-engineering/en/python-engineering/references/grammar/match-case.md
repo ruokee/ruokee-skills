@@ -54,7 +54,7 @@ In these cases the alternative is a stack of `isinstance` checks plus manual ind
 
 - Dispatch is on a single value with a known set of outcomes. A dict mapping keys to handlers (`handlers[key]()`) is clearer, extensible at runtime, and testable in isolation. Use that instead of a long `match` of literal cases.
 - The logic is a small boolean decision. Two or three ordinary conditions read better as `if`/`elif`; `match` adds ceremony without structure to exploit.
-- You are modeling a state machine. A transition table — `(state, event) -> next_state` — keeps states and transitions as data you can enumerate, validate, and diagram. A `match` buries those transitions in control flow where you cannot see the whole graph at once. See [state machine modeling](../../../code-quality/references/programming-paradigms/state-machine.md) for why explicit transitions matter.
+- You are modeling a state machine. A transition table — `(state, event) -> next_state` — keeps states and transitions as data you can enumerate, validate, and diagram. A `match` buries those transitions in control flow where you cannot see the whole graph at once. See [state machine modeling](code-quality/references/programming-paradigms/state-machine.md) for why explicit transitions matter.
 
 The rule of thumb: if there is no structure to destructure, `match` is probably the wrong reach.
 

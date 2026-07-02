@@ -4,7 +4,7 @@ A test suite is two things at once: a safety net that catches regressions and a 
 
 ## Test Organization
 
-Keep tests in a top-level `tests/` directory, separate from the production package, so they are never shipped and so they exercise the package the way a real consumer would (see [structure](../project/structure.md) for why the src layout reinforces this). Name test files and functions after the *behavior* under test, not the implementation file they happen to touch — `test_expired_token_is_rejected` tells a reader what the system guarantees; `test_validate` tells them only which function ran. For a large library or framework, loosely mirroring the package tree helps locate tests, but the mirror is a navigation aid, not a rule that every module gets a parallel test file. Tests deserve the same care as production code: clear names, no copy-paste sprawl, and obvious intent.
+Keep tests in a top-level `tests/` directory, separate from the production package, so they are never shipped and so they exercise the package the way a real consumer would (see [structure](references/project/structure.md) for why the src layout reinforces this). Name test files and functions after the *behavior* under test, not the implementation file they happen to touch — `test_expired_token_is_rejected` tells a reader what the system guarantees; `test_validate` tells them only which function ran. For a large library or framework, loosely mirroring the package tree helps locate tests, but the mirror is a navigation aid, not a rule that every module gets a parallel test file. Tests deserve the same care as production code: clear names, no copy-paste sprawl, and obvious intent.
 
 ## Fixture Design
 

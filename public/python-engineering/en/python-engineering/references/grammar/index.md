@@ -7,4 +7,4 @@ Read these files when a Python language construct is central to the task: decidi
 - `decorator.md`: decorators as higher-order functions, parameterized and class-based forms, metadata preservation, and the typing cost.
 - `exception-groups.md`: `ExceptionGroup` and `except*` (Python 3.11+) for concurrent and batched failures, and when a single exception is the right tool instead.
 
-These documents describe mechanisms, not review policy. They give the context a human or agent needs to judge a specific use; the review workflow itself lives under `../../workflow/`.
+These documents describe mechanisms, not review policy. They give the context a human or agent needs to judge a specific use; the review workflow itself lives under `workflow/`.

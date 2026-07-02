@@ -35,7 +35,7 @@ The primary value is transactional consistency: multiple repository operations t
 
 **Nested transactions.** Avoid deeply nested Units of Work. If sub-operations need independent commit/rollback, use savepoints explicitly rather than nesting Units of Work.
 
-**Error handling.** Rollback must happen on any exception path. [Context managers](../../../python-engineering/references/grammar/context-manager.md) (`with uow:`) are the natural fit — `__exit__` calls rollback if an exception is active. This is also how [resource lifecycle](../programming-paradigms/resource-lifecycle.md) patterns work: pair acquire with release.
+**Error handling.** Rollback must happen on any exception path. [Context managers](python-engineering/references/grammar/context-manager.md) (`with uow:`) are the natural fit — `__exit__` calls rollback if an exception is active. This is also how [resource lifecycle](references/programming-paradigms/resource-lifecycle.md) patterns work: pair acquire with release.
 
 **Testing.** The Unit of Work boundary is a natural seam for testing. Mock or in-memory implementations let service-layer tests verify orchestration behavior without a database.
 
@@ -51,8 +51,8 @@ with unit_of_work() as uow:
     uow.commit()
 ```
 
-If an exception occurs before `commit()`, the context manager's `__exit__` calls `rollback()`. This makes the transaction boundary explicit and exception-safe. The [context manager mechanism](../../../python-engineering/references/grammar/context-manager.md) guarantees teardown even on unexpected exceptions.
+If an exception occurs before `commit()`, the context manager's `__exit__` calls `rollback()`. This makes the transaction boundary explicit and exception-safe. The [context manager mechanism](python-engineering/references/grammar/context-manager.md) guarantees teardown even on unexpected exceptions.
 
 ## Relationship To Repository
 
-[Repository](repository.md) provides the collection-like API for individual aggregates. Unit of Work coordinates *when* those changes are persisted. They compose naturally: the Unit of Work owns or provides access to repositories, and all repository operations within a Unit of Work share its transaction scope. See also [DDD aggregate boundaries](../design-principles/ddd.md) for deciding what constitutes an aggregate.
+[Repository](repository.md) provides the collection-like API for individual aggregates. Unit of Work coordinates *when* those changes are persisted. They compose naturally: the Unit of Work owns or provides access to repositories, and all repository operations within a Unit of Work share its transaction scope. See also [DDD aggregate boundaries](references/design-principles/ddd.md) for deciding what constitutes an aggregate.

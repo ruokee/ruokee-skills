@@ -20,7 +20,7 @@ User explicitly says "full review", "complete review", "systematic review", or "
    - Uncertain — open questions to resolve by reading or by asking the user.
 2. Read in stages, not all at once.
    - Project facts: `pyproject.toml` (`requires-python`, dependencies, groups, tool config), `.pre-commit-config.yaml`, CI, test config, Makefile.
-   - Preferences: `.agents/preferences/python-engineering.md`, else `.../python-engineering/index.md`. Continue without them if absent.
+   - Preferences: `.agents/preferences/python-engineering.md`, else `.agents/preferences/python-engineering/index.md`. Continue without them if absent.
    - Relevant code and tests, pulled in by the review matrix below — load each category as you reach it.
 3. Work the review matrix. For each, gather evidence before judging:
    - Version & dependencies — syntax/stdlib vs `requires-python`; declared deps, correct groups, no undeclared imports.

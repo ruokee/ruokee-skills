@@ -36,4 +36,4 @@ Solve the problem first, then decide whether a named pattern earns its keep. Do 
 - [repository.md](repository.md): Repository — abstract persistence behind a collection-like interface.
 - [unit-of-work.md](unit-of-work.md): Unit of Work — track changes and commit atomically.
 
-For state machines in general (not just the State pattern), see [../programming-paradigms/state-machine.md](../programming-paradigms/state-machine.md).
+For state machines in general (not just the State pattern), see [state-machine](references/programming-paradigms/state-machine.md).
