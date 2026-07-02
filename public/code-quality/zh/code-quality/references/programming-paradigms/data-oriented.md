@@ -1,43 +1,43 @@
-# Data-Oriented Design
+# 面向数据设计（Data-Oriented Design）
 
-## 它是什么
+## 什么是面向数据设计
 
-Data-oriented design 从 data 出发，而不是从 behavior 出发。它不问“有哪些 objects，它们能做什么”，而是问“data 的形状是什么，它如何在系统中流动，它经历了哪些 transformations”。你会优先使用的结构很朴素：schemas、tables、records、typed dicts、仅作为 data 使用的 dataclasses，仅此而已。Behavior 放在接收 data 并返回 data 的 functions 里，而不是绑定在 data 上的 methods 里。
+面向数据设计（Data-Oriented Design）从数据出发，而不是从行为出发。它不问"存在哪些对象，它们能做什么"，而是问"数据的形态是什么，它如何在系统中流动，它经历哪些转换"。你使用的结构是简单的：模式、表、记录、类型化字典、仅用作数据的 dataclass。行为存在于接收数据并返回数据的函数中，而不是绑定在数据上的方法中。
 
-在它的起源场景（game engines、高性能系统）里，这个术语带有很强的关于 memory layout 和 cache locality 的主张。在普通应用代码里，更实用、也更克制的理解是：显式建模 data，并让它的形状驱动程序结构。大多数 ETL jobs、API 边界、configuration systems 和 batch processors 本质上都是 data pipelines，把它们写成这样会最清楚。
+在其起源处（游戏引擎、高性能系统），该术语带有关于内存布局和缓存局部性的强烈主张。在普通应用程序代码中，更有用的含义更广泛、更安静：显式地建模数据，让它的形状驱动程序的结构。大多数 ETL 作业、API 边界、配置系统和批处理处理器本质上是数据管道，当以这种方式编写时它们最清晰。
 
-## 其背后的假设
+## 底层假设
 
-- Data 有一个形状，而且这个形状通常是程序里最稳定的东西之一。endpoints、rules 和 UIs 往往比核心 record 变化得更频繁。
-- 将 data（惰性的结构）与 behavior（对它做运算的 functions）分离，会让两者都更容易检查、序列化、版本化和测试。
-- 对于 pipeline 型问题，“这个 data 会经过哪些 transformations” 比“哪些 objects 彼此协作” 是更诚实的拆分方式。
+- 数据具有形状，这个形状是程序中最稳定的部分——端点、规则和 UI 比核心记录变化得更频繁。
+- 将数据（惰性结构）与行为（处理数据的函数）分离，使两者都更易于检查、序列化、版本化和测试。
+- 对于管道形式的问题，"这些数据经历了哪些转换"比"哪些对象在协作"是更诚实的分解方式。
 
 ## 何时适用
 
-- **ETL 和 data pipelines。** Records 依次经过 parse、validate、transform、aggregate 和 write 各阶段。每一阶段都是 data 到 data 的函数；这既是 data-oriented design，也是 [functional-core.md](./functional-core.md) 从两个角度描述同一个系统。
-- **API 边界。** Request 和 response bodies 都是 data。把它们建模成 schemas（dataclass、TypedDict、Pydantic），并让 handler logic 作为对这些 data 的 transformations。
-- **Configuration。** Config 是声明式 data（见 [declarative.md](./declarative.md)）；在边界处把它解析成 typed structure，然后向内传递这个结构。
-- **Batch processing。** 每条 record 的规则是作用于普通 record 的纯函数；外层循环、checkpointing 和 I/O 则属于 imperative shell。
+- **ETL 和数据管道。** 记录流经解析、验证、转换、聚合和写入阶段。每个阶段都是一个从数据到数据的函数；这是面向数据设计和 [functional-core.md](./functional-core.md) 从两个角度描述同一个系统。
+- **API 边界。** 请求和响应体是数据。将它们建模为模式（dataclass、TypedDict、Pydantic），带有单一事实来源，并将处理器逻辑保持为对数据的转换。
+- **配置。** 配置是声明式数据（参见 [declarative.md](./declarative.md)）；在边界处将其解析为类型化结构，然后将该结构向内传递。
+- **批处理。** 每条记录的规则是对纯记录的纯函数；周围的循环、检查点和 I/O 是命令式外壳。
 
-## 与 functional style 的关系
+## 与函数式风格的关系
 
-Data-oriented design 和 functional programming 是密切的盟友。Functional style 说的是“优先使用 pure functions，而不是围着 data 做文章”；data-oriented design 说的是“把 data 显式化，并让它领路”。两者合在一起会得到相同的架构：近似不可变的 records 在 pure transformations 之间流动，副作用被推到边缘。区别只在强调点上：一个从 functions 出发，另一个从 record 的形状出发；在实践中它们会汇合。
+面向数据设计和函数式编程是紧密盟友。函数式风格说"优先选择对数据的纯函数"；面向数据设计说"让数据显式并由它引领"。它们共同产生相同的架构：不可变的（ish）记录流经纯转换，副作用被推到边缘。区别在于侧重点——一个从函数出发，另一个从记录的形状出发——在实践中它们趋于一致。
 
-## 什么时候对象更合适
+## 何时带有行为的对象更好
 
-当 data 带有必须始终成立的不变量时，data-oriented 立场就会明显变弱。普通 record 是惰性的：没有任何东西会阻止调用者把它放进非法组合。若某个概念对哪些字段组合有效、生命周期、或必须与自身状态保持一致的 behavior 有规则，那么用一个把该状态封装起来并保护不变量的 object 更合适。见 [object-oriented.md](./object-oriented.md)。
+当数据具有必须始终持有的不变量时，面向数据的立场就会削弱。纯记录是惰性的：没有什么能阻止调用者将它们放入非法组合。当一个概念具有关于哪些字段组合有效的规则、生命周期或必须与其状态保持一致的行为时，封装该状态并守卫其不变量的对象是更好的模型——参见 [object-oriented.md](./object-oriented.md)。
 
-你已经把 plain data 推得太远的迹象包括：
+表明你把纯数据推得太远的迹象：
 
-- 同一个 record 的 validation logic 被复制粘贴到每个触碰它的 function 里，因为没有任何单一位置拥有这个不变量。
-- 调用者可以构造出本不应可能的字段组合（[state-machine.md](./state-machine.md) 所说的 “boolean flag soup” smell）。
-- 这个“data”开始长出很多不同 functions 需要共享并保持一致的 behavior。
+- 对同一记录的验证逻辑被复制粘贴到每个处理它的函数中，因为没有单一的地方拥有该不变量。
+- 调用者可以构造应该不可能的字段组合（[state-machine.md](./state-machine.md) 的"布尔标志汤"坏味道）。
+- "数据"开始增长出多个函数需要共享并保持一致的行为。
 
-到那时就该封装了。Plain data 适用于其有效性由产生它的边界来保证的 records；objects 则适用于其有效性必须持续维护的 concepts。
+在这一点上，进行封装。纯数据适用于其有效性是其产生边界的属性的记录；对象适用于其有效性必须持续维护的概念。
 
-## 一个具体的形状
+## 一个具体的形态
 
-一个 data-oriented pipeline 会表现为一串对显式 records 的 transformations，每一阶段都是从 data 到 data 的 pure function：
+面向数据的管道读起来是一系列对显式记录的转换，每个阶段是一个从数据到数据的纯函数：
 
 ```python
 from dataclasses import dataclass
@@ -63,18 +63,18 @@ def charges(rows: list[RawRow]) -> list[Charge]:
     return [parse(r) for r in rows]
 ```
 
-这些 records 不携带 behavior；这些 functions 不携带 state。读取、写入和 checkpointing 发生在外围的 imperative shell 中，而不是这些函数里。正是这种分离，让每一阶段都能用字面 data 测试，并组合成更长的 pipeline。
+记录不带行为；函数不带状态。读取、写入和检查点发生在周围的命令式外壳中，而不是在这些函数中。这种分离使得每个阶段可以用字面数据进行测试，并可组合成更长的管道。
 
-## 让非法 data 难以表示
+## 使非法数据难以表示
 
-认真对待 data 还有一个更安静的好处：一个设计得好的 shape 可以在任何 logic 运行之前就消除一整类 bug。如果一个 field 只能是三个值之一，就把它建模成 enum，而不是自由字符串。如果两个 field 必须同时出现或者同时缺失，就把它们放进一个嵌套 record，而不是两个独立 optional。如果一个 list 必须非空，那就值得在边界处编码或检查一次。原则就是把 validity 推进 data 的 shape 中，使下游 functions 可以信任输入，而不必反复检查。这和 [state-machine.md](./state-machine.md) 里拒绝让 boolean flags 充当 state 的直觉是一样的：type 是第一道防线。
+认真对待数据的一个更安静的好处是，精心选择的形状在任何逻辑运行之前就消除了整类错误。如果一个字段只能是三个值之一，将其建模为枚举，而不是自由字符串。如果两个字段必须一起出现或完全不出现，将它们放在嵌套记录中，而不是两个独立的可选字段。如果列表必须非空，这值得在边界处编码或检查一次。规范是将有效性推入数据的形状，使下游函数可以信任它们的输入，而不是重新检查它们。这与 [state-machine.md](./state-machine.md) 拒绝让布尔标志编码状态的直觉相同——类型是第一道防线。
 
-这件事应当发生在边界。把不可信输入（JSON、config、request bodies）一次性解析成 typed structure，并在过程中完成验证，然后让内部所有东西都在可信的 shape 上运行。这就是“parse, don't validate”：把原始 data 转成一种其存在本身就保证有效性的结构，而不是把原始 data 传播得到处都是，再到处散布 validation checks。
+边界是这项工作发生的地方。将不受信任的输入（JSON、配置、请求体）解析为类型化结构一次，在解析时进行验证，让向内的一切都在可信的形状上操作。这就是"parse, don't validate"：将原始数据转换为一个存在即保证其有效性的结构，而不是将原始数据到处传递并在各处撒上验证检查。
 
 ## 在 Python 中
 
-- 对纯 data record 优先使用 `dataclass`；当 record 是没有 identity 的 value object 时，优先考虑 `frozen=True`（参见 stdlib references 中关于 dataclass 的说明）。
-- 当 data 以 dict 形式到达（JSON、config）且你希望在不转成 object 的情况下做 shape-checking 时，使用 `TypedDict`。
-- 把这些结构保持为 data：避免给 dataclass 挂重型 business workflow。那会变成“无意中贫血，然后又被过度塞满”的 antipattern。如果真的出现不变量，就升级成带 methods 的 class。
-- 对每个 schema 建立单一事实来源，而不是在 types、runtime validation 和 docs 中重复声明同一个 shape。
-- Transformations 应该放在 module-level functions 中，它们作用于 data，并可组合成 pipelines；除非行为本质上属于该 type，否则不要放进 methods 里。
+- 对纯数据记录优先使用 `dataclass`；当记录是没有身份的值对象时，使用 `frozen=True`（参见 stdlib 参考资料中的 dataclass 指南）。
+- 当数据以字典形式到达（JSON、配置）并且你想要形状检查而不转换为对象时，使用 `TypedDict`。
+- 保持这些结构作为数据：避免将繁重的业务工作流附加到 dataclass 上——那就是"意外贫血，然后过载"的反模式。如果出现真正的不变量，升级到带有方法的类。
+- 为每个模式建立单一事实来源，而不是在类型、运行时验证和文档中重复声明相同的形状。
+- 转换属于模块级别的处理数据的函数，可以组合成管道，而不是方法（除非行为是类型固有的）。

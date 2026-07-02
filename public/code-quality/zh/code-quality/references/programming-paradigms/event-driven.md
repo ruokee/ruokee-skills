@@ -1,58 +1,58 @@
-# Event-Driven Architecture
+# 事件驱动架构（Event-Driven Architecture）
 
-## 它是什么
+## 什么是事件驱动架构
 
-Event-driven architecture 把 event 视为第一类事实：某件事发生了，这个事实被记录并发布，而不是直接触发一段已知代码。producer 发出一个 event（`OrderPaid`、`FileUploaded`、`user.signup`），而不需要知道或关心谁会消费它。consumers 订阅它们关心的 events。两者之间的 coupling 是 event schema，而不是直接的 function call。
+事件驱动架构（Event-Driven Architecture）将事件视为一等事实：某事发生了，这个事实被记录和发布，而不是直接触发一段已知的代码。生产者发出一个事件（`OrderPaid`、`FileUploaded`、`user.signup`），不知道也不关心谁消费它。消费者订阅他们关心的事件。它们之间的耦合是事件模式，而不是直接的函数调用。
 
-它会出现在很多尺度上：进程内的 signals 和 hooks（Django signals、pytest hooks、Qt signals）、应用内的 pub/sub，以及跨 services 的 message queues 或 event buses（Kafka、RabbitMQ、SQS、Redis streams）。统一思想是一样的：反转 dependency，让导致状态变化的东西不再持有对所有必须做出反应者的引用。
+这出现在许多规模上：进程内的信号和钩子（Django 信号、pytest 钩子、Qt 信号）、应用程序内的发布/订阅，以及跨服务的消息队列或事件总线（Kafka、RabbitMQ、SQS、Redis 流）。统一的思想是相同的——反转依赖关系，使得引起状态变化的东西不持有对所有必须*响应*它的东西的引用。
 
-## 其背后的假设
+## 底层假设
 
-- Producers 和 consumers 会因为不同原因而变化，因此应该能够独立部署、独立测试、独立推理。
-- “发生了什么” 比“调用这个特定 handler” 更耐久。新的 reactions 可以在不修改 producer 的情况下被添加。
-- 对某些系统来说，event log 本身就有价值：append-only 的事实记录天然就是 audit trail，也是 replay 的基础。
+- 生产者和消费者因不同的原因而变化，应该可以独立部署、测试和推理。
+- "某事发生了"是一个比"调用这个特定的处理器"更持久的接口。新的反应可以在不触及生产者的情况下添加。
+- 对于某些系统，事件日志本身是有价值的：只追加的事实记录是自然的审计追踪和重放的基础。
 
 ## 何时适用
 
-- **将 producers 与 consumers 解耦。** 一个动作需要触发多个互不相关的 reactions（发送邮件、更新 analytics、使 cache 失效），而你不希望源代码知道它们全部。
-- **Audit trails 和 event sourcing。** events 的序列本身就是 source of truth；当前状态只是一个 projection。这样可以 replay、做 temporal queries，并天然拥有 audit history。
-- **Asynchronous workflows。** 不应该阻塞 request path 的工作——通知、索引、下游处理——很自然地可以表达为“emit event，让 worker 处理它”。
-- **扩展点。** Plugins 和 hooks 允许第三方在不修改核心代码的情况下，对 lifecycle events 做出反应。
+- **解耦生产者和消费者。** 一个动作需要触发几个不相关的反应（发送电子邮件、更新分析、使缓存失效），而你不希望原始代码知道所有它们。
+- **审计追踪和事件溯源。** 事件序列*就是*事实来源；当前状态是一个投影。这提供了重放、时间查询和内置的审计历史。
+- **异步工作流。** 不应阻塞请求路径的工作——通知、索引、下游处理——自然地表达为"发出事件，让工作者处理它"。
+- **扩展点。** 插件和钩子允许第三方在不修改核心代码的情况下对生命周期事件做出反应。
 
 ## 风险
 
-Event-driven systems 用解耦换取了 explicit control flow，而这种交换是有真实成本的：
+事件驱动系统以显式控制流换取解耦，这种权衡有实际代价：
 
-- **Hidden control flow。** 你无法只看 producer 就知道接下来会发生什么；reactions 在别处。这和 [declarative.md](./declarative.md) 中提到的调试困难一样，只是更强烈——call graph 是在 runtime 通过 subscriptions 组装出来的。
-- **顺序与投递。** Events 可能乱序到达、重复投递，或者丢失。consumers 通常必须是 idempotent 的（同一个 event 处理两次不会产生额外影响）——这也是 [state-machine.md](./state-machine.md) 在重复 events 时所需要的属性。
-- **错误上下文。** 当 consumer 失败时，失败在代码和时间上都离 producer 很远。重建“是什么导致了这次失败”需要 correlation IDs 和良好的 event metadata。
-- **Event storms / cascades.** 一个 event 触发 handlers，而这些 handlers 又 emit 更多 events，再触发更多 handlers。如果不加小心，这会无限 fan-out，甚至形成 cycle。
+- **隐藏的控制流。** 你无法阅读一个生产者就知道下一步会发生什么；反应在其他地方。这与 [declarative.md](./declarative.md) 中提到的调试困难相同，但被放大了——调用图在运行时通过订阅组装而成。
+- **顺序和投递。** 事件可能乱序到达、被投递多次或丢失。消费者通常必须是幂等的（处理同一事件两次不会产生额外效果）——这与 [state-machine.md](./state-machine.md) 对重复事件所需的属性相同。
+- **错误上下文。** 当消费者失败时，失败在代码和时间上都远离生产者。重构"是什么导致了这"需要关联 ID 和良好的事件元数据。
+- **事件风暴/级联。** 一个事件触发发出更多事件的处理器，进而触发更多处理器。如果不加注意，这会无限制地扇出或形成循环。
 
-## Consumer 失败与 delivery guarantees
+## 消费者失败和投递保证
 
-直接 function call 的 failure path 很明显：caller 看见 exception。event 没有这种清晰度，因此 consumer failure 需要明确 policy。设计由三个问题决定：
+直接的函数调用有一个明显的失败路径：调用者看到异常。事件完全没有这种清晰性，因此消费者失败需要一个显式策略。三个问题决定了设计：
 
-- **当 consumer 抛出异常时会怎样？** 在同步的进程内 bus 中，一个失败的 handler 可能会中止其他 handler，除非每个 handler 都被隔离。要决定失败的 reaction 应该阻塞其 sibling，还是只被局部隔离。
-- **delivery semantics 是什么？** At-most-once（失败就 fire 并丢弃）、at-least-once（重试直到被确认，所以 consumers 可能看到重复）、还是 exactly-once（通常只是 transport 层的幻觉，借助幂等 consumers 加去重来近似）。大多数持久 broker 提供的是 at-least-once，这也是为什么 idempotency 不是可选项。
-- **Poison messages 去哪儿？** 一个总是让 consumer 失败的 event 不能永远堵住队列。dead-letter queue 会把反复失败的 events 收集起来以供检查，而不是无限重试它们。
+- **当消费者抛出异常时会发生什么？** 在同步的进程内总线中，一个失败的处理器可能会中止其他处理器，除非每个处理器被隔离。决定是失败的响应应该阻塞其兄弟还是被隔离。
+- **投递语义是什么？** 至多一次（触发，失败则丢弃）、至少一次（重试直到确认，因此消费者可能会看到重复），或精确一次（通常在传输层是不现实的，通过幂等消费者加去重来近似）。大多数持久化代理提供至少一次，这就是幂等性不可选的原因。
+- **毒消息去哪里？** 一个总是导致其消费者失败的事件不能永远阻塞队列。死信队列捕获反复失败的事件以供检查，而不是无限重试它们。
 
-贯穿始终的原则是：对于 direct call，failure contract 是隐含而明显的；对于 events，你必须有意识地设计它，因为当事情出错时 producer 早就走开了。
+主线：使用直接调用时，失败契约是隐式且明显的；使用事件时，你必须刻意设计它，因为当问题发生时生产者已经离开了。
 
-## 与 Observer pattern 的关系
+## 与观察者模式的关系
 
-Observer pattern 是 event-driven design 在进程内最小的实例：subject 保存一组 observers，并在变更时通知它们。Event-driven architecture 将其泛化——“subject” 变成 event bus 或 broker，notification 变成 publish，observers 变成可能位于其他进程或服务中的 subscribers。依赖反转是一样的；区别在于 transport、durability，以及 delivery 是否同步。当地解耦是局部且同步时，普通 Observer（或一个简单的 callback list）就够了；只有在你需要跨进程投递、durability 或 async processing 时，才需要 broker。
+观察者模式（Observer pattern）是事件驱动设计的最小、进程内实例：一个主题维护一个观察者列表并在变化时通知它们。事件驱动架构对此进行了泛化——"主题"变成了事件总线或代理，通知变成了发布，观察者变成了可能位于其他进程或服务中的订阅者。同样的依赖反转适用；区别在于传输、持久性以及投递是否为同步。当解耦是本地且同步的，普通的观察者（或简单的回调列表）就足够了；只有当需要跨进程投递、持久性或异步处理时，才使用代理。
 
-## Events vs commands
+## 事件 vs 命令
 
-有一个值得保持清晰的区分：`command` 是在告诉某个特定 handler 去做某事（`SendEmail`、`ChargeCard`），并期待它发生；`event` 是在宣布某件事已经发生（`OrderPaid`、`EmailSent`），并不要求谁来响应。Commands 是定向的，通常只有一个 handler；events 是广播的，可能有零个、一个或多个 handler。把两者混淆起来——把 event 命名得像 command，或者把已发布的 event 当成某个特定 consumer 必须处理的东西——会悄悄把 event-driven design 试图移除的 coupling 又带回来。用过去时态把 event 命名成事实；如果你开始在意*哪个* consumer 会运行，那你大概需要的是 direct call 或 command，而不是 event。
+一个值得保持清晰的区别：*命令*告诉特定的处理器做某事（`SendEmail`、`ChargeCard`）并期望它发生；*事件*宣布某事已经发生（`OrderPaid`、`EmailSent`）并对谁做出反应没有要求。命令是有方向的，通常恰好有一个处理器；事件是广播的，可能有零个、一个或多个。混淆两者——将事件命名得像命令，或者将发布的事件视为某个特定消费者必须处理它——会悄悄地重新引入事件驱动设计本要移除的耦合。用过去时态将事件命名为事实；如果你发现自己在关心*哪个*消费者运行，你可能想要的是直接调用或命令，而不是事件。
 
-## 同步与异步投递
+## 同步 vs 异步投递
 
-会改变整个 event system 性格的一个选择，是 `publish` 是在 handlers 完成前阻塞（同步），还是交出去后立即返回（异步）。同步的进程内投递比较容易推理——producer 的 call stack 仍然包含 handlers，exceptions 会向上传播，顺序也是确定的——但它把 producer 的 latency 和 failure 与 consumers 绑定在一起，这在某种程度上削弱了解耦。异步投递（队列、broker、background task）恢复了解耦，但也引入了所有分布式系统问题：at-least-once delivery、顺序、部分失败，以及对幂等 consumers 的需求。若 reaction 很便宜、局部，并且必须在 producer 继续之前完成，就选同步；若 reaction 很慢、远程，或与 producer 的成功真正独立，就选异步。
+一个改变整个事件系统特性的选择是 `publish` 是否阻塞直到处理器完成（同步）还是移交并立即返回（异步）。进程内同步投递易于推理——生产者的调用栈仍然包含处理器，异常会传播回来，顺序是确定的——但它将生产者的延迟和失败与消费者耦合在一起，这在一定程度上破坏了去耦。异步投递（队列、代理、后台任务）恢复了去耦，但引入了所有的分布式系统问题：至少一次投递、顺序、部分失败以及幂等消费者的需求。当响应是轻量级、本地且必须在生产者继续之前完成时，选择同步；当响应是缓慢、远程或真正独立于生产者的成功时，选择异步。
 
 ## 在 Python 中
 
-- 进程内：一个简单的 `event_name -> list[callable]` 字典通常就够了；不要为了本地解耦就引入 message broker。
+- 进程内：一个简单的 `event_name -> list[callable]` 字典通常就足够了；不要为本地解耦引入消息代理。
 
 ```python
 from collections import defaultdict
@@ -67,14 +67,14 @@ class EventBus:
 
     def publish(self, event: str, payload: object) -> None:
         for handler in self._subscribers[event]:
-            handler(payload)   # producer never names a consumer
+            handler(payload)   # 生产者从不命名消费者
 ```
 
-这就是这个模式在最小尺度下的全部样子：publisher 只知道 event 名和 payload，永远不知道 handlers。更大的系统——broker、durability、async delivery——只是同样的形状加上更多基础设施。
+这就是最小尺度上的整个模式：发布者知道事件名称和负载，从不了解处理器。任何更大的东西——代理、持久性、异步投递——都是具有更多基础设施的相同形状。
 
-- Framework 通常会提供 signals/hooks（Django signals、Flask signals、pytest hooks）——在框架内部工作时，优先使用它自己的机制，而不是自己手搓一个。
-- 把 event payload 设计成普通 data（`dataclass` / `TypedDict`），并使用稳定、带版本的 schema；这是 producer 与 consumer 之间的 contract。
-- 让 consumer 具备 idempotency，并记录足够的 context（event ID、correlation ID）以追踪失败。
-- 对于 async workflows，emit 出去的 event 通常会变成一个 task——见 [async-concurrency.md](./async-concurrency.md)，要关注这份工作的生命周期，而不是 fire-and-forget。
-- 保持 audit 价值诚实：如果 events 是 source of truth，就要像对待 database schema 一样认真对待 event schema。
-- 避免把本质上是 direct request-response 的流程做成 event。如果 producer 需要结果、会阻塞等待，或者只有一个 consumer，那么 plain function call 比 event round-trip 更清晰。
+- 框架提供信号/钩子（Django 信号、Flask 信号、pytest 钩子）——在其中工作时优先使用框架的机制而不是自制的。
+- 使事件负载成为纯数据（`dataclass`/`TypedDict`），具有稳定、版本化的模式；这是生产者和消费者之间的契约。
+- 设计消费者为幂等的，并记录足够的上下文（事件 ID、关联 ID）以追踪失败。
+- 对于异步工作流，发出的事件通常变成一个任务——参见 [async-concurrency.md](./async-concurrency.md) 以了解如何拥有该工作的生命周期，而不是触发后遗忘。
+- 保持审计价值诚实：如果事件是你的事实来源，像对待数据库模式一样对待事件模式。
+- 抵制将事件用于实际上是直接请求-响应的流程。如果生产者需要结果、阻塞等待它或只有唯一一个消费者，普通函数调用比事件往返更清晰。

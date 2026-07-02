@@ -1,39 +1,39 @@
-# Design Patterns
+# 设计模式（Design Patterns）
 
-设计模式是对重复出现的设计问题的词汇，而不是默认就该套用的模板。每个模式都命名了一种解决“变体问题”的形状：某些东西会变化，而模式把这种变化隔离在一个稳定接口之后。代价始终是额外一层间接层。
+设计模式是针对重复出现的设计问题的词汇，而非默认套用的模板。每种模式命名了一种解决特定变体问题的形态：某些东西会变化，而该模式将变化隔离在一个稳定的接口后面。代价总是多一层间接性。
 
-在套用一个模式之前，先问：
+在选用模式之前，请问自己：
 
-- 这个变化点是真的，还是臆想出来的？抽象了一个从未出现的变化，只会带来纯开销。
-- 更简单的构造是否已经足够？在 Python 里，一等函数、`dataclass`、`Protocol`、`match`、decorator、context manager、iterator 和 dispatch map 能吸收或收缩掉很多经典面向对象模式。
-- 这个模式是在降低调用方的理解成本，还是只是在多加一跳？
-- 失败成本是什么：全局状态、隐藏控制流、类爆炸、更难测试、性能问题，还是生命周期不清晰？
+- 变体点是真实的，还是推测的？抽象一个从未出现的变体的模式纯粹是开销。
+- 更简单的构造是否足够？在 Python 中，一等函数、`dataclass`、`Protocol`、`match`、装饰器、上下文管理器、迭代器和分发映射可以吸收或简化许多经典的面向对象模式。
+- 该模式降低了调用方的理解成本，还是仅仅增加了一次跳转？
+- 故障成本是什么：全局状态、隐藏的控制流、类爆炸、更难测试、性能问题，还是不清晰的生命周期？
 
-先把问题解决，再决定是否值得为它命名成一个模式。不要先选模式，再反过来找问题去套它。
+先解决问题，再决定命名模式是否值得。不要先选一个模式，再去找问题来套。
 
-## 创建型
+## 创建型（Creational）
 
-- [factory.md](factory.md)：Factory Method - 把创建与调用方解耦；在 Python 里常常只是一个函数。
-- [abstract-factory.md](abstract-factory.md)：Abstract Factory - 创建必须一起变化的相关对象家族。
-- [builder.md](builder.md)：Builder - 一步一步构造复杂对象。
+- [factory.md](factory.md)：工厂方法（Factory Method）—— 将创建与调用方解耦；在 Python 中通常就是一个函数。
+- [abstract-factory.md](abstract-factory.md)：抽象工厂（Abstract Factory）—— 创建必须一起变化的相关对象族。
+- [builder.md](builder.md)：生成器（Builder）—— 分步构建复杂对象。
 
-## 结构型
+## 结构型（Structural）
 
-- [adapter.md](adapter.md)：Adapter - 让不兼容的接口协作起来。
-- [decorator.md](decorator.md)：Decorator pattern - 通过包装添加行为（与 Python 的 `@decorator` 语法不同）。
-- [facade.md](facade.md)：Facade - 复杂子系统之上的简单接口。
+- [adapter.md](adapter.md)：适配器（Adapter）—— 使不兼容的接口协同工作。
+- [decorator.md](decorator.md)：装饰器模式（Decorator pattern）—— 通过包裹来添加行为（与 Python 的 `@decorator` 语法不同）。
+- [facade.md](facade.md)：外观模式（Facade）—— 为复杂子系统提供简单接口。
 
-## 行为型
+## 行为型（Behavioral）
 
-- [strategy.md](strategy.md)：Strategy - 稳定接口背后可互换的算法。
-- [observer.md](observer.md)：Observer / Pub-Sub - 一对多事件通知。
-- [command.md](command.md)：Command - 把请求封装成对象。
-- [state.md](state.md)：State - 通过多态状态对象实现状态相关行为。
-- [visitor.md](visitor.md)：Visitor - 给稳定的 node type 添加新操作。
+- [strategy.md](strategy.md)：策略模式（Strategy）—— 可互换的算法，背后是稳定接口。
+- [observer.md](observer.md)：观察者模式（Observer）/ 发布-订阅（Pub-Sub）—— 一对多的事件通知。
+- [command.md](command.md)：命令模式（Command）—— 将请求封装为对象。
+- [state.md](state.md)：状态模式（State）—— 通过多态状态对象实现状态特定行为。
+- [visitor.md](visitor.md)：访问者模式（Visitor）—— 为稳定的节点类型添加操作。
 
-## 持久化 / 应用
+## 持久化 / 应用（Persistence / application）
 
-- [repository.md](repository.md)：Repository - 通过类似 collection 的接口抽象持久化。
-- [unit-of-work.md](unit-of-work.md)：Unit of Work - 跟踪变更并原子提交。
+- [repository.md](repository.md)：仓库模式（Repository）—— 将持久化抽象为类似集合的接口。
+- [unit-of-work.md](unit-of-work.md)：工作单元（Unit of Work）—— 跟踪变更并原子提交。
 
-关于通用 state machine（不只是 State 模式），见 [../programming-paradigms/state-machine.md](../programming-paradigms/state-machine.md)。
+关于状态机（不限于状态模式），请参阅 [state-machine](references/programming-paradigms/state-machine.md)。

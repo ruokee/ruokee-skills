@@ -1,12 +1,12 @@
 # uv
 
-uv 是一个 Python project 和 environment manager：它解析依赖、构建 lockfile、运行脚本、管理工具安装，并提供 Python 解释器。它回答的是“这个项目使用哪个 Python、安装了哪些 dependency、环境如何复现、工具如何运行”，而不是规定代码风格。
+uv 是一个 Python 项目和环境管理器：它解析依赖、构建锁文件、运行脚本、管理工具安装以及提供 Python 解释器。它回答的是"这个项目使用哪个 Python、安装了哪些依赖、如何复现环境、如何运行工具"，而不是规定代码风格。
 
-uv 把过去需要 pip、pip-tools、pipx、virtualenv 和版本管理器分别完成的工作统一起来。它速度很快，而且默认就会写 lockfile，这让可复现环境成了最省力的路径。
+uv 整合了以前需要 pip、pip-tools、pipx、virtualenv 和版本管理器分别完成的工作。它速度很快，并且默认写入锁文件，这使得可复现的环境成为阻力最小的路径。
 
-## 项目创建
+## 项目创建（Project Creation）
 
-`uv init` 会 scaffold 一个项目，包含 `pyproject.toml`、一个固定本地解释器的 `.python-version` 文件，以及一个起始的 source layout。`[project]` 表负责 `requires-python`、依赖列表和 packaging metadata。`requires-python` 应有意识地设定，因为它会影响版本条件语法决策，并约束 resolver。
+`uv init` 会生成一个包含 `pyproject.toml`、一个固定本地解释器版本的 `.python-version` 文件以及初始源码布局的项目。`[project]` 表包含 `requires-python`、依赖列表和打包元数据。请审慎固定 `requires-python`，因为它驱动版本条件语法决策并约束解析器。
 
 ```bash
 uv init my-project
@@ -14,9 +14,9 @@ cd my-project
 uv add httpx
 ```
 
-## 依赖管理
+## 依赖管理（Dependency Management）
 
-`uv add <pkg>` 和 `uv remove <pkg>` 会同时编辑 `pyproject.toml` 并更新 lockfile。`uv lock` 只重新解析而不安装，`uv sync` 则让环境与 lockfile 完全一致，移除未声明的内容。环境被视为派生状态：在 `pyproject.toml` 中声明意图，让 lockfile 和 `.venv` 去跟随它。
+`uv add <pkg>` 和 `uv remove <pkg>` 一步完成编辑 `pyproject.toml` 并更新锁文件。`uv lock` 在不安装的情况下重新解析，`uv sync` 使环境与锁文件精确匹配，移除任何未声明的依赖。环境被视为派生状态：在 `pyproject.toml` 中声明意图，锁文件和 `.venv` 随之自动更新。
 
 ```bash
 uv add "fastapi>=0.115"
@@ -24,17 +24,17 @@ uv add --dev pytest ruff
 uv remove requests
 ```
 
-## lockfile
+## 锁文件（Lockfile）
 
-`uv.lock` 会跨平台记录完整解析后的 dependency graph 和 hash。对于 application，应提交它，这样每台机器和每次 CI 运行都安装相同版本。只有那些必须针对一组依赖版本重新解析的 library，才是通常不提交 lockfile 的主要场景，但大多数 repository 都会从检查入库的 lockfile 中受益。
+`uv.lock` 记录跨平台带有哈希值的完全解析依赖图。对于应用程序，请将其提交到版本控制，以便每台机器和 CI 运行都能安装完全相同的版本。需要针对一系列依赖版本进行动态解析的库是不提交锁文件的主要情况，但大多数仓库都能从提交锁文件中受益。
 
-## 依赖组
+## 依赖组（Dependency Groups）
 
-开发、测试、lint 和 typing 依赖应放在 groups 中，而不是 runtime dependency 列表中，这样它们可以被选择性安装，并且不会进入发布产物。默认 dev group 用 `uv add --dev`，命名 group 则用 `--group <name>`。具体表结构取决于当前 uv 版本对 `[dependency-groups]` 和 `[tool.uv]` 的支持方式。
+开发、测试、代码检查和类型检查依赖应属于不同的组，而不是放在运行时依赖列表中，这样它们可以有选择地安装，并从发布的制品中排除。使用 `uv add --dev` 添加默认 dev 组，或使用 `--group <name>` 添加命名组。确切的表布局取决于当前 uv 版本在 `[dependency-groups]` 和 `[tool.uv]` 下支持的内容。
 
-## 脚本执行
+## 脚本执行（Script Execution）
 
-`uv run <command>` 会在受管理环境中执行，必要时先同步，因此贡献者不需要手动激活 virtualenv，也不会拿到过时环境。所有工具调用都应通过它路由，以保持本地和 CI 行为一致。
+`uv run <command>` 在管理的环境中执行，必要时先执行 sync，这样贡献者无需手动激活虚拟环境或使用过时的环境。将每个工具调用都通过 uv run 路由，以保持本地和 CI 行为一致。
 
 ```bash
 uv run pytest
@@ -42,7 +42,7 @@ uv run ruff check
 uv run python -m myapp
 ```
 
-单文件脚本使用 PEP 723 内联 metadata：在文件顶部用注释块声明依赖，`uv run script.py` 就可以在没有项目的情况下 provision 一个临时环境。
+单文件脚本使用 PEP 723 行内元数据：文件顶部的注释依赖块使 `uv run script.py` 无需项目即可提供临时环境。
 
 ```python
 # /// script
@@ -52,23 +52,23 @@ uv run python -m myapp
 import httpx
 ```
 
-## 工具管理
+## 工具管理（Tool Management）
 
-`uv tool install` 和 `uv tool run`（别名 `uvx`）用于在隔离环境中管理独立 CLI 工具，承担 pipx 所做的角色。这适合那些全局有用、但不是项目依赖的工具。项目级质量工具则更适合声明为 dependency-group 成员并通过 `uv run` 执行，这样它们的版本会和检查的代码一起被锁定。
+`uv tool install` 和 `uv tool run`（别名 `uvx`）在隔离环境中管理独立 CLI 工具，覆盖了 pipx 的角色。这适用于那些全局有用但不是项目依赖的工具。项目范围内的质量工具最好声明为依赖组成员，并使用 `uv run` 运行，这样它们的版本与所检查的代码一起被锁定。
 
 ```bash
 uvx ruff check
 uv tool install pre-commit
 ```
 
-## Workspace
+## 工作空间（Workspace）
 
-workspace 把多个相关 package 组织在一个 lockfile 和共享解析之下，类似 Cargo 或 npm workspaces。成员通过 `[tool.uv.workspace]` 声明。适用于一个应共享单一解析的共同开发 package monorepo；如果只是几个碰巧放在同一目录下的无关项目，就不要使用，因为共享解析会把它们的依赖约束绑在一起。
+工作空间（workspace）将多个相关包组合在一个锁文件和共享解析下，类似于 Cargo 或 npm 的工作空间。成员在 `[tool.uv.workspace]` 下声明。将其用于需要共享单一解析的协同开发包的单仓库；避免将其用于只是碰巧位于同一目录下的无关项目，因为共享解析会耦合它们的依赖约束。
 
-## Python 版本管理
+## Python 版本管理（Python Version Management）
 
-uv 会下载并管理独立的 CPython 构建，因此只要有 `requires-python` 和 `.python-version`，就能获得匹配的解释器，而不需要 pyenv 之类的独立工具。`uv python install 3.12` 可以 provision 某个版本，而 resolver 在选择解释器时会遵循项目声明的边界。
+uv 下载并管理独立的 CPython 构建，因此 `requires-python` 和 `.python-version` 就足以获得匹配的解释器，无需 pyenv 等独立工具。`uv python install 3.12` 提供某个版本，解析器在选择版本时会尊重项目声明的范围。
 
 ## 与 pip、pipx 和 Poetry 的关系
 
-uv 覆盖了 pip（安装）、pip-tools（lock）、pipx（工具隔离）、virtualenv（环境）以及版本管理器分别完成的工作。与 Poetry 相比，它们在项目和依赖管理上有重叠，但 uv 更强调速度和更广泛的环境角色。工具之所以值得采用，是因为它又快又统一；它并不能替代类型检查、测试、coverage 或 CI，后者仍然负责把关正确性。现有的 Poetry 或 Hatch 项目、带有自身约束的已发布 library，以及组织标准化设置，都应根据自身价值迁移，而不是自动迁移。
+uv 覆盖了 pip（安装）、pip-tools（锁定）、pipx（工具隔离）、virtualenv（环境）和版本管理器各自独立完成的工作。与 Poetry 相比，它在项目和依赖管理上有重叠，但强调速度和更广泛的环境角色。该工具快速且统一是采用它的理由；它不能替代类型检查、测试、覆盖率或 CI，这些仍然是正确性的门禁。现有的 Poetry 或 Hatch 项目、有自身约束的已发布库以及组织标准配置，应根据其自身情况进行迁移，而非自动迁移。

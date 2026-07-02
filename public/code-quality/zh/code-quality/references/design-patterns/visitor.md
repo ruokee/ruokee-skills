@@ -1,53 +1,53 @@
-# Visitor
+# 访问者模式（Visitor）
 
-Visitor 模式把操作与其作用的对象结构分离开。它允许你在一个固定的 node type 集合之上定义新操作，而无需修改这些类型。每个 node type 都实现一个 `accept(visitor)` 方法，调用 visitor 对应的 `visit_*` 方法，从而实现 double dispatch。
+访问者模式将操作与它们所操作的对象结构分离。它允许你在不修改节点类型的情况下，为一组固定的节点类型定义新操作。每个节点类型实现一个 `accept(visitor)` 方法，该方法调用访问者相应的 `visit_*` 方法，从而实现双重分发。
 
-当类型集合稳定而操作集合经常变化时，这个模式最有价值。它把常见权衡反转了：新增一个操作很容易（增加一个新的 Visitor class），但新增一个 node type 则需要更新所有现有 Visitors。
+当类型集合稳定但操作集合频繁变化时，该模式最有价值。它反转了通常的权衡：添加新操作很容易（添加一个新的 Visitor 类），但添加新的节点类型需要更新所有现有的访问者。
 
 ## 结构
 
-- Element（node type）：声明 `accept(visitor)`。
-- ConcreteElement：通过调用 `visitor.visit_concrete_element(self)` 来实现 `accept`。
-- Visitor（接口）：为每个 element type 声明一个 `visit_*` 方法。
-- ConcreteVisitor：为每个 `visit_*` 实现操作专属逻辑。
+- 元素（Element，节点类型）：声明 `accept(visitor)`。
+- 具体元素（ConcreteElement）：通过调用 `visitor.visit_concrete_element(self)` 实现 `accept`。
+- 访问者（Visitor，接口）：为每种元素类型声明一个 `visit_*` 方法。
+- 具体访问者（ConcreteVisitor）：用特定于操作的逻辑实现每个 `visit_*`。
 
-## 何时适合这个模式
+## 模式适用时
 
-- node type 层次结构稳定。新增类型很少。
-- 在这个结构之上的新操作很常见。
-- 这些操作需要在不使用 `isinstance` 级联的情况下访问具体类型。
-- 操作逻辑不应污染数据 class。
-- 存在多个独立的遍历关注点（lint、transform、serialize、pretty-print）。
+- 节点类型层次结构稳定。新类型很少出现。
+- 对结构的新操作很常见。
+- 操作需要访问具体类型而不使用 `isinstance` 级联。
+- 操作逻辑不应污染数据类。
+- 存在多个独立的遍历关注点（lint、转换、序列化、美化打印）。
 
-## 何时不适合这个模式
+## 模式不适用时
 
-- node type 经常变化。每新增一种类型，都要更新所有 Visitors。
-- 结构足够简单，一个递归函数或 `match`/`case` 就能搞定。
-- 只有一两个操作。`accept` / `visit` 的仪式感并不会增加清晰度。
-- 语言支持 [pattern matching](../../../python-engineering/references/grammar/match-case.md) 或 [`singledispatch`](../../../python-engineering/references/stdlib/functools.md)，双重分发就显得多余。
-- 操作并不需要完整的具体类型 - 一个通用接口方法就够了。
+- 节点类型频繁变化。每种新类型都强制更新所有访问者。
+- 结构足够简单，单个递归函数或 `match`/`case` 就足够了。
+- 只有一两个操作存在。accept/visit 的仪式感没有增加清晰性。
+- 语言支持[模式匹配](python-engineering/references/grammar/match-case.md)或 [`singledispatch`](python-engineering/references/stdlib/functools.md)，使双重分发变得不必要。
+- 操作不需要完整的具体类型——公共接口方法就足够了。
 
 ## Python 替代方案
 
-Python 提供了比经典 Visitor 更轻量的替代方案：
+Python 提供了比经典访问者更轻量的替代方案：
 
-- **`match`/`case` 加结构模式**：适用于 tagged union、dataclass 层次或 typed dict。不需要 `accept` 方法。见 [pattern matching reference](../../../python-engineering/references/grammar/match-case.md)。
-- **`functools.singledispatch`**：按第一个参数的类型分发。适合在封闭类型集合上做单参数操作。见 [functools](../../../python-engineering/references/stdlib/functools.md)。
-- **字典分发**：把 type 映射到 handler function。最简单的形式；没有基础设施。
-- **在 node 上放方法**：如果操作很少且稳定，就把行为直接放到 node 上。不需要这个模式。
+- **`match`/`case` 与结构模式**：适用于标记联合、dataclass 层次结构或类型化字典。无需 accept 方法。请参阅[模式匹配参考](python-engineering/references/grammar/match-case.md)。
+- **`functools.singledispatch`**：根据第一个参数的类型进行分发。适用于一个封闭类型集合上的单参数操作。请参阅 [functools](python-engineering/references/stdlib/functools.md)。
+- **字典分发**：将类型映射到处理器函数。最简单的形式；无需基础设施。
+- **节点上的方法**：如果操作少且稳定，直接将行为放在节点上。无需模式。
 
-经典的 accept/visit 双重分发 Visitor，最适合的场景是：你希望用一个 protocol 强制每个 visitor 都处理每种类型；你需要在 traversal 过程中由 visitor object 累积状态；或者类型层次存在于你无法控制的 library 中。
+经典的 accept/visit 双重分发访问者在以下情况下最合理：你想要一个协议强制每个访问者处理所有类型，你需要在遍历过程中在访问者对象中积累状态，或者类型层次结构位于你无法控制的库中。
 
 ## 常见实现问题
 
-**遍历责任。** 谁来走树 - visitor、node 的 accept method，还是外部 iterator？在一个结构内部保持一致。混用不同策略会导致 node 被访问两次或漏访问。
+**遍历责任。** 谁来遍历树——访问者、节点的 accept 方法，还是外部迭代器？在结构内保持一致。混合策略会导致节点被访问两次或跳过。
 
-**返回值。** 经典 Visitor 使用无返回值的 visit，通过累积状态来工作。对于每次访问都产生值的函数式遍历，可以考虑让 visit method 返回值，而不是修改 visitor 自身。
+**返回值。** 经典访问者使用 void 访问并积累状态。对于每次访问产生值的函数式遍历，考虑从访问方法返回值，而不是修改访问者。
 
-**默认处理。** 提供一个 `visit_default` 或 `generic_visit` 来处理未知 node type。否则，新增 node type 时可能会静默跳过访问，而不是抛错。这在不断演化的树结构中尤其重要。
+**默认处理。** 为未知节点类型提供 `visit_default` 或 `generic_visit`。没有它，添加新节点类型会静默跳过其访问而不是抛出异常。这在演进的树中尤其重要。
 
-**Composite children.** 对于树结构，要决定 `accept` 是否自动递归子节点，还是必须由 visitor logic 显式递归。自动递归很方便，但会隐藏遍历顺序；显式遍历则让 visitor 控制深度优先还是广度优先，并允许剪枝。
+**组合子节点。** 对于树形结构，决定 `accept` 是否自动递归到子节点，还是需要显式的访问者逻辑。自动递归方便但可能隐藏遍历顺序；显式遍历让访问者控制深度优先与广度优先，并允许剪枝。
 
-## 与 Strategy 的关系
+## 与策略模式的关系
 
-[Strategy](strategy.md) 变的是一个稳定调用点背后的算法。Visitor 变的是一个稳定类型层次结构之上的操作。Strategy 是按调用点变化；Visitor 是按 node type family 变化。如果你是在多个类型上做一个操作，Visitor 可能过度设计 - [Strategy](strategy.md) 或普通函数就够了。
+[策略模式](strategy.md)在稳定的调用点后变化算法。访问者在稳定的类型层次结构上变化操作。策略是按调用点的；访问者是按节点类型族的。如果你有一个操作作用在许多类型上，访问者可能是大材小用——[策略模式](strategy.md)或普通函数就足够了。

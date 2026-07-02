@@ -1,52 +1,52 @@
-# Fast Review — Python Engineering
+# 快速审查 — Python 工程 (Fast Review — Python Engineering)
 
-默认模式。适用于开发后的快速、高信号自检，或较小 diff。以较低成本、较少且更有把握的 findings 为目标，而不是追求覆盖面。
+默认模式。开发后或针对小型 diff 的快速、高信号自检。以低成本和少量可信发现为目标优化，而非追求覆盖率。
 
-## 触发条件
+## 触发条件 (Trigger)
 
-- 未指定模式时的默认选择。
+- 未指定模式时的默认行为。
 - 日常开发自检。
-- 小 diff、单文件，或聚焦的 PR。
+- 小型 diff、单个文件或针对性 PR。
 
-## 前提
+## 前置条件 (Preconditions)
 
 - 只读。不要修改代码。
-- 需要一个明确目标：一个 diff、一个文件，或一组已命名的文件。如果范围是整个 repository，或者不清楚，就请用户收窄，或者按 full review 处理。
+- 有具体目标：一个 diff、一个文件或一组命名文件。如果范围是整个仓库或不明确，请让用户缩小范围，或将请求视为完整审查。
 
-## 步骤
+## 步骤 (Steps)
 
-1. 建立项目事实。读取 `pyproject.toml`，看 `requires-python`、依赖和工具配置。快速扫一眼目录布局（`git ls-files`、`find`）来分类 project shape。
-2. 读取偏好（如存在）：`.agents/preferences/python-engineering.md`，否则 `.agents/preferences/python-engineering/index.md`。如果都没有，就继续。
-3. 扫描 diff 或指定文件。优先使用 `git diff`、`git show`、`rg`、`nl`，不要一次性加载全部内容。
-4. 按以下方面检查目标：
-    - 版本兼容性 - `requires-python` 与语法 / stdlib 的对应。
-    - 依赖卫生 - 新 import 是否有声明依赖支持，是否放在正确分组。
-    - 布局清晰度 - 文件是否放在适合项目形态的位置。
-    - 类型边界泄漏 - `Any`、未受保护的 `cast`、模块边缘未标注的 public signature。
-    - 资源生命周期 - 未用 context manager 或未保证清理就打开的文件、socket、lock、client。
-    - 数据模型清晰度 - 用 dict / tuple 代替稳定记录，而不是改用 `dataclass` / `TypedDict`。
-    - 不必要的复杂度 - 抽象、间接层或标志位超出了变更所需。
-    - 工具可验证动作 - 写出能确认修复的命令（test、type check），但不要主动运行。
-5. 输出 0-5 条 findings，按信号强度排序。零 findings 也是合理且好的结果。
+1. 建立项目事实。阅读 `pyproject.toml` 获取 `requires-python`、依赖和工具配置。快速查看目录布局（`git ls-files`、`find`）以分类项目形态。
+2. 如存在则阅读偏好设置：`.agents/preferences/python-engineering.md`，否则 `.agents/preferences/python-engineering/index.md`。如果两者都不存在，继续执行不加载偏好。
+3. 扫描 diff 或指定文件。优先使用 `git diff`、`git show`、`rg`、`nl`，而非加载所有内容。
+4. 对照以下项检查目标：
+   - 版本兼容性 — 语法/标准库使用 vs `requires-python`。
+   - 依赖卫生 — 新导入有已声明的依赖支持，分组正确。
+   - 布局清晰度 — 文件放置在适合项目形态的合理位置。
+   - 类型边界泄漏 — `Any`、未受保护的 `cast`、模块边界的未类型化公开签名。
+   - 资源生命周期 — 文件、套接字、锁、客户端未使用上下文管理器或保证清理而打开。
+   - 数据模型清晰度 — 使用字典/元组替代需要 `dataclass`/`TypedDict` 的稳定记录。
+   - 不必要的复杂度 — 超出变更所需的抽象、间接层或标志。
+   - 工具可验证的操作 — 指出可确认修复的命令（测试、类型检查），不要未经提示就运行它。
+5. 输出 0-5 条发现，最高信号优先。零条发现是有效的好结果。
 
-## 输出格式
+## 输出格式 (Output Format)
 
-以 findings 为先，且保持简洁。每条 finding 一段：
+发现优先且简洁。每条发现一个块：
 
 ```text
-- [severity] path:line Title
-  Fact: observable code/config evidence.
-  Impact: correctness, maintainability, readability, testability, runtime, or delivery cost.
-  Recommendation: smallest sufficient change.
+- [严重级别] 路径:行号 标题
+  事实：可观察的代码/配置证据。
+  影响：正确性、可维护性、可读性、可测试性、运行时或交付成本。
+  建议：最小足够的变更。
 ```
 
-除非真的有信号，否则省略 Open Questions 和 Notes。不要为了凑足五条而填充内容。
+除非包含真实信号，否则跳过开放问题和备注。不要为了凑够五条而填充。
 
-## 停止规则
+## 停止规则 (Stop Rules)
 
-- 不要升级到 full review - 只有当 diff 明显值得更深检查时才建议。
+- 不要升级到完整审查 — 仅当 diff 明显需要更深入工作时才建议。
 - 不要修改代码。
-- 不要运行修复、安装，或任何会写文件、创建 `.venv` / 缓存、或改变 lockfile 的命令。
-- 最多 5 条 findings；保留最有分量的。
-- 跳过 Ruff、ty、mypy 或 pre-commit 能机械捕捉到的内容。如果它们会影响 review，可在 Note 中提一次。
-- 不要把偏好当作 Python 语言事实。
+- 不要运行修复、安装或任何会写入文件、创建 `.venv`/缓存或更改锁文件的命令。
+- 最多 5 条发现；保留最重要的。
+- 跳过任何 Ruff、ty、mypy 或 pre-commit 能机械捕获的内容。仅在阻碍审查时在备注中提一次。
+- 不要将偏好设置呈现为 Python 语言事实。

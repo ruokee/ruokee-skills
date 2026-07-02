@@ -1,35 +1,35 @@
-# Refactoring
+# 重构（Refactoring）
 
-这是 Martin Fowler 式 refactoring 的参考文档：由 code smells 驱动、且保持行为不变的结构调整。目标不是“为了整洁而整洁”，而是一种有纪律的实践 - 识别症状、保护当前行为、再做小而命名清晰、可逆的变换。这个目录里既有框架文档，也有 smell 目录，还有最常在日常工作和 agent 辅助工作中遇到的 smell 与 refactoring 叶子文档。
+Martin Fowler 风格重构的参考文档：由代码坏味驱动的、保持行为不变的重构。目标不是"为了整洁而整洁"，而是一种有纪律的实践——识别症状，保护当前行为，然后应用一个小的、命名的、可逆的变换。此目录包含框架文档、坏味目录，以及日常和代理辅助工作中最常见坏味和重构的独立文档。
 
-如果你是在判断 _要不要_、以及 _怎么_ 重构，就先看框架。如果你已经看到了某个症状，想弄懂它以及它的修法，就去对应的 smell 文档。如果你已经知道自己要做什么变换，就去具体的 refactoring 文档。
+如果你正在决定*是否*以及*如何*重构，请从框架文档开始。当你已经发现某个症状并想理解它及其修复方式时，查阅特定坏味文档。当你知道要执行什么操作时，查阅重构文档。
 
 ## 框架
 
-|问题|阅读|
+| 问题 | 阅读 |
 |-|-|
-|什么是 refactoring，什么时候该做，什么时候不该做|[fowler-refactoring.md](./fowler-refactoring.md)|
-|什么是 code smell，属于哪一类，现在值不值得修|[code-smells.md](./code-smells.md)|
-|如何在不破坏行为的情况下重构|[safe-refactoring.md](./safe-refactoring.md)|
+| 什么是重构，何时该做，何时不该做 | [fowler-refactoring.md](./fowler-refactoring.md) |
+| 什么是代码坏味，属于哪个类别，是否值得现在修复 | [code-smells.md](./code-smells.md) |
+| 如何在不破坏行为的前提下重构 | [safe-refactoring.md](./safe-refactoring.md) |
 
-## Smells
+## 坏味
 
-|症状|阅读|
+| 症状 | 阅读 |
 |-|-|
-|函数做得太多，混了抽象层次，难命名|[long-function.md](./long-function.md)|
-|同一份知识在多个地方表达|[duplicated-code.md](./duplicated-code.md)|
-|该用领域类型时却用了字符串 / 整数 / dict|[primitive-obsession.md](./primitive-obsession.md)|
-|某方法比起自己更常用别的对象的数据|[feature-envy.md](./feature-envy.md)|
-|一次逻辑改动要改很多地方|[shotgun-surgery.md](./shotgun-surgery.md)|
-|一个模块因为很多不相关的原因而变化|[divergent-change.md](./divergent-change.md)|
-|函数只是转发调用或改名，没有增加价值|[thin-wrapper-function.md](./thin-wrapper-function.md)|
+| 函数做的事太多，混合了抽象层级，难以命名 | [long-function.md](./long-function.md) |
+| 同一知识在多处表达 | [duplicated-code.md](./duplicated-code.md) |
+| 应该使用领域类型的地方用了字符串/整数/字典 | [primitive-obsession.md](./primitive-obsession.md) |
+| 方法使用另一个对象的数据比使用自己的多 | [feature-envy.md](./feature-envy.md) |
+| 一个逻辑变更迫使在多处修改 | [shotgun-surgery.md](./shotgun-surgery.md) |
+| 一个模块因多个无关原因而变更 | [divergent-change.md](./divergent-change.md) |
+| 函数仅转发调用或重命名，未增加价值 | [thin-wrapper-function.md](./thin-wrapper-function.md) |
 
-## Refactorings
+## 重构
 
-|变换|阅读|
+| 操作 | 阅读 |
 |-|-|
-|把一个连贯片段提成独立命名函数|[extract-function.md](./extract-function.md)|
-|把函数折回调用方|[inline-function.md](./inline-function.md)|
-|把行为迁移到更合适的拥有者|[move-function.md](./move-function.md)|
+| 将一个连贯的片段提取为独立的命名函数 | [extract-function.md](./extract-function.md) |
+| 将一个函数折叠回其调用方 | [inline-function.md](./inline-function.md) |
+| 将行为迁移到更合适的所有者 | [move-function.md](./move-function.md) |
 
-Smells 和 refactorings 是同一实践的两面：smell 命名问题，refactoring 命名解法。smell 文档会指向能解决它们的 refactoring，而 refactoring 文档也会说明它们针对的是哪些 smell。关于这些判断背后的原则 - DRY、Rule of Three、single responsibility - 见 `../design-principles/`。
+坏味和重构是一个实践的两个方面：坏味命名问题，重构命名解法。坏味文档指向解决它们的重构，重构文档则指出激发它们的坏味。关于这些判断背后的原则——DRY、三次法则、单一职责——请参见 `references/design-principles/`。

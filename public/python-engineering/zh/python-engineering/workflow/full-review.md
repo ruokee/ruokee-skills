@@ -1,74 +1,73 @@
-# Full Review — Python Engineering
+# 完整审查 — Python 工程 (Full Review — Python Engineering)
 
-系统化、基于证据的 Python 工程评审。比 fast review 更重：分阶段读取、验证高严重度 findings，并在给出有风险建议前先征求确认。只有用户明确要求时才进入这个模式。
+系统性的、基于证据的 Python 工程审查。比快速审查更重：分阶段阅读、验证高严重性发现，并在提出有风险的建议前停下来请求确认。仅在用户要求时运行。
 
-## 触发条件
+## 触发条件 (Trigger)
 
-用户明确说“full review”、“complete review”、“systematic review”或“architecture review”。不要自行进入这个模式。
+用户明确说"full review"、"complete review"、"systematic review"或"architecture review"。不要自行进入此模式。
 
-## 前提
+## 前置条件 (Preconditions)
 
-- 默认只读。只有在用户要求修复时才修改代码。
-- 先确认范围再广泛阅读：是哪一个 package、module 或 subsystem，这次 review 的目的是什么（发布、交接、重构决策）。
-- 先读，再判断，别靠猜。
+- 默认只读。仅在用户要求修复时修改代码。
+- 在广泛阅读前确认范围：哪个包、模块或子系统，以及审查的目的（发布、交接、重构决策）。
 
-## 步骤
+## 步骤 (Steps)
 
-1. 上下文接收。在阅读代码前，把工作分成四类：
-    - 必须阅读 —— 没有它们 review 就不可能正确。
-    - 应该阅读 —— 相邻代码、测试和配置，会影响判断。
-    - 已知 —— 对话中已经建立的事实；不要重复推导。
-    - 不确定 —— 需要通过阅读或询问用户来解决的问题。
-2. 分阶段阅读，而不是一口气全读。
-    - 项目事实：`pyproject.toml`（`requires-python`、依赖、groups、工具配置）、`.pre-commit-config.yaml`、CI、测试配置、Makefile。
-    - 偏好：`.agents/preferences/python-engineering.md`，否则 `.../python-engineering/index.md`。如果没有就继续。
-    - 根据下方 review matrix 逐步加载相关代码和测试。
-3. 依据 review matrix 工作。对每一项，先收集证据再下判断：
-    - 版本与依赖 - 语法 / stdlib 与 `requires-python` 是否一致；依赖是否声明正确，是否放在正确分组。
-    - 布局、入口点、workspace - project shape、package 边界、script/console entry point、workspace 成员一致性。
-    - 类型覆盖 - public signature 是否标注，`Any` / `cast` 是否有充分理由，Protocol / generics 是否在有价值时使用。
-    - Docstring 与 API docs - public surface 是否有文档，信息是否放在读者会去找的地方。
-    - 测试 - 关注行为覆盖而非行覆盖，fixture 和 parametrize 结构，断言是否有意义。
-    - 自定义 lint - 项目专属的机械规则是否遵守；如有必要，记录可新增的规则候选。
-    - 语法选择 - `match`/`case`、context managers、exception groups、decorators 是否用在合适位置，而不是装饰性使用。
-    - stdlib 使用 - 是否使用 `functools`、`itertools`、`contextlib`、`pathlib`、`enum`、`dataclasses`、`logging` 代替手工实现。
-    - 工具配置 - uv、Ruff、ty/mypy/basedpyright、pytest、coverage、pre-commit 是否配置一致且互不矛盾。
-4. 对每一条高严重度 finding 自我复核。重新阅读证据，考虑一个合理的反例读法，并说明置信度。任何无法支持的内容都应降级或移除。
-5. 确认停顿。在建议以下内容之前先停下来询问：
-    - 不安全的修复或会写文件、创建 `.venv` / 缓存、或改变 lockfile 的命令。
-    - 批量 suppress 或大范围配置调整。
-    - 跨文件重构或依赖变更。
-    - 行为变更型建议。
+1. 上下文摄入。在阅读代码前将工作分为四个桶：
+   - 必须阅读 — 没有这些文件审查就无法正确进行。
+   - 应该阅读 — 相邻代码、测试和配置，有助于形成判断。
+   - 已知信息 — 对话中已建立的事实；不要重新推导。
+   - 不确定 — 需要通过阅读或询问用户来解决的开放问题。
+2. 分阶段阅读，不要一次性全部加载。
+   - 项目事实：`pyproject.toml`（`requires-python`、依赖、分组、工具配置）、`.pre-commit-config.yaml`、CI、测试配置、Makefile。
+   - 偏好设置：`.agents/preferences/python-engineering.md`，否则 `.agents/preferences/python-engineering/index.md`。如不存在则跳过。
+   - 相关代码和测试，根据下面的审查矩阵拉取 — 在到达每个类别时加载。
+3. 执行审查矩阵。对每一项，先收集证据再判断：
+   - 版本与依赖 — 语法/标准库 vs `requires-python`；已声明的依赖、正确的分组、无未声明的导入。
+   - 布局、入口点、工作空间 — 项目形态、包边界、脚本/控制台入口点、工作空间成员一致性。
+   - 类型覆盖 — 公开签名已类型化、`Any`/`cast` 有合理解释、Protocol/泛型在值得使用时使用。
+   - 文档字符串与 API 文档 — 公开接口有文档、信息放在读者会查看的位置。
+   - 测试 — 行为覆盖优先于行覆盖、fixture 和参数化结构、有意义的断言。
+   - 自定义 lint — 项目特定的机械规则得到遵守；注意到适合新规则的候选。
+   - 语法选择 — `match`/`case`、上下文管理器、异常组、装饰器在合适时使用，而非作为装饰。
+   - 标准库使用 — 使用 `functools`、`itertools`、`contextlib`、`pathlib`、`enum`、`dataclasses`、`logging` 而非手动实现的等效功能。
+   - 工具链配置 — uv、Ruff、ty/mypy/basedpyright、pytest、coverage、pre-commit 配置一致且互不矛盾。
+4. 自行验证每个高严重性发现。重新阅读证据，考虑合理的误读可能，说明置信度。降级或放弃任何无法支持的内容。
+5. 确认停止。在提出以下任何建议前，停下来询问：
+   - 不安全的修复或会写入文件、创建 `.venv`/缓存或更改锁文件的命令。
+   - 批量压制或全面配置更改。
+   - 跨文件重构或依赖更改。
+   - 改变行为的建议。
 
-## 输出格式
+## 输出格式 (Output Format)
 
-按 matrix 分类分组输出 findings。每条 finding 用一个 block：
-
-```text
-- [severity, confidence] path:line Title
-  Fact: observable code/config evidence.
-  Impact: correctness, maintainability, readability, testability, runtime, or delivery cost.
-  Judgment: Python engineering category.
-  Preference: preference source path, if used.
-  Evidence: support, counter-evidence, and remaining uncertainty.
-  Recommendation: smallest sufficient change.
-  Verification: command to run, or why none is needed.
-```
-
-最后附上：
+按审查矩阵类别分组的结构化发现。每条发现一个块：
 
 ```text
-Open Questions
-- Items needing user or project confirmation.
-
-Notes
-- Downgraded, tool-handled, or intentionally unreported items.
+- [严重级别, 置信度] 路径:行号 标题
+  事实：可观察的代码/配置证据。
+  影响：正确性、可维护性、可读性、可测试性、运行时或交付成本。
+  判断：Python 工程类别。
+  偏好：偏好来源路径（如使用）。
+  证据：支持证据、反证及剩余不确定性。
+  建议：最小足够的变更。
+  验证：要运行的命令，或说明为何不需要。
 ```
 
-## 停止规则
+最后以如下内容结束：
 
-- 未经明确要求，不要修改代码。
-- 对不安全、批量、跨文件、依赖或行为变更建议要先确认。
-- 不要把偏好当作 Python 语言事实或普适工程结论。
-- 不要报告 Ruff、ty、mypy 或 pre-commit 机械能查出的内容 - 如有影响可在 Notes 中提一次，然后继续。
-- 保持事实、推断、判断、偏好和建议彼此分离。
+```text
+开放问题 (Open Questions)
+- 需要用户或项目确认的事项。
+
+备注 (Notes)
+- 被降级的、由工具处理的或有意不报告的项目。
+```
+
+## 停止规则 (Stop Rules)
+
+- 未经明确要求修复，不要修改代码。
+- 对不安全、批量、跨文件、依赖或改变行为的建议进行确认停止。
+- 不要将偏好设置呈现为 Python 语言事实或通用工程结论。
+- 不要报告 Ruff、ty、mypy 或 pre-commit 能机械捕获的内容 — 如果影响审查则提一次，然后继续。
+- 保持事实、推断、判断、偏好和建议相互分离。

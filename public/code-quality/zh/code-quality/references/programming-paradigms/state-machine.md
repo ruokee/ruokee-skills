@@ -1,56 +1,56 @@
-# State Machine / Finite-State Model
+# 状态机/有限状态模型（State Machine / Finite-State Model）
 
-State machine 把一个过程建模为有限个命名 state、一个事件集合，以及管理它们之间移动的规则。它回答的不是“class 还是 function？”而是：系统此刻能处于哪些 states，它接受哪些 events，哪些 transitions 是合法的，非法 transitions 如何被拒绝，以及在 transition 时会触发哪些 side effects。这是日常工程中最有杠杆的一种模型，因为很多 bug 本质上都是非法 state bug，只是换了身衣服。
+状态机（State Machine）将一个过程建模为有限个命名状态、一组事件以及控制它们之间移动的规则。它回答的问题不是"类还是函数？"而是：系统现在可以处于哪些状态，它接受什么事件，哪些转换是合法的，非法转换如何被拒绝，以及转换时触发什么副作用。这是日常工程中最高杠杆的模型之一，因为这么多错误实际上是穿着不同外衣的非法状态错误。
 
-它不是 GoF State pattern 的同义词。那个 pattern 只是 state machine 的一种 object-oriented implementation。这个 model 更广，可以用 transition table、`Enum` 加 dispatch、`match` statement、pure reducer function 或 state objects 来表达。
+它不是 GoF 状态模式的同义词。该模式是状态机的一种*面向对象实现*。该模型更广泛，可以表示为转换表、`Enum` 加分发、`match` 语句、纯归约器函数或状态对象。
 
 ## 概念
 
-State machine 将 workflow 视为 data：一个事物可以占据的 modes、推动它移动的 triggers，以及对所有不允许情况的 policy。把合法移动显式化，会让“我们忘了处理一个 cancelled order 被 pay 了”的问题，从潜在的 production bug 变成一个你能看见、能审查的单条缺失 table entry。
+状态机将工作流捕获为数据：事物可以占据的模式、触发其移动的触发器，以及对所有不允许的情况的策略。将合法移动显式化，将"我们忘记处理已取消订单被支付的情况"从潜在的生产错误变成了一个你可以看到和审查的、缺失的表格条目。
 
 ## 核心模型
 
-- **State** — 系统所处的一个命名且互斥的 mode（`draft`、`submitted`、`paid`）。任何时刻它只会处于其中一个。
-- **Event** — 一个命名触发器，可能引发 transition（`submit`、`pay`、`cancel`）。Events 是从机器外部到来的 facts 或 commands。
-- **Transition** — 针对某个 event，从一个 state 到另一个 state 的合法移动：`(state, event) -> next_state`。
-- **Guard** — transition 的前置条件。即便 transition 存在，guard 也可以阻止它：余额足够、权限有效、resource 仍然存在。
-- **Action** — transition 发生时执行的 side effect：写 database、发送 message、emit event、记录 audit entry。
-- **Invalid transition handling** — 对当前 state 不接受的 event 所采取的显式 policy：raise、reject 或 no-op。这是一个决策，而不是一个会静默什么都不做的未处理分支。
+- **状态（State）**——系统占据的命名、互斥的模式（`draft`、`submitted`、`paid`）。在任何时刻它恰好处于其中一个。
+- **事件（Event）**——可能导致转换的命名触发器（`submit`、`pay`、`cancel`）。事件是来自机器外部的事实或命令。
+- **转换（Transition）**——响应事件从一个状态到另一个状态的合法移动：`(state, event) -> next_state`。
+- **守卫（Guard）**——转换的前提条件。即使转换存在，守卫也可以阻止它：足够的余额、有效的权限、资源仍然存在。
+- **动作（Action）**——执行转换时触发的副作用：写入数据库、发送消息、发出事件、记录审计条目。
+- **非法转换处理（Invalid transition handling）**——当前状态不接受的事件时的显式策略：抛出、拒绝或空操作。这是一个决策，绝不是一个静默不做任何事的未处理分支。
 
 ## 何时适用
 
-- States 是有限的，而且可以命名；events 也是有限的，而且可以命名。
-- 非法 transitions 很重要——从 `cancelled` 到 `shipped` 必须是不可能的，而不仅仅是不太可能。
-- 生命周期正确性是 domain 的一部分：orders、approvals、subscriptions、protocol/connection state、job 和 worker lifecycles。
-- 你需要审计为什么 `A -> B` 被允许，而 `A -> C` 不被允许，尤其是在合规场景下。
-- 这个过程会与 persistence、retry 或 concurrency 交互，而精确的“当前 state”概念可以防止 corruption。
+- 状态是有限且可以命名的，事件是有限且可以命名的。
+- 非法转换很重要——从 `cancelled` 到 `shipped` 必须是不可能的，而不仅仅是不太可能。
+- 生命周期正确性是领域的一部分：订单、审批、订阅、协议/连接状态、作业和工作者的生命周期。
+- 你需要审计*为什么* `A -> B` 是允许的而 `A -> C` 是不允许的，通常是出于合规性。
+- 过程涉及持久化、重试或并发，其中精确的"当前状态"概念可以防止数据损坏。
 
 ## 何时不适用
 
-- 一个简单的线性流程，没有分支，也没有非法步骤的概念。
-- 极小且显而易见的分支，用一个 boolean field 或一个单独的 `if` 就已经足够清楚。
-- 没有真正的非法 state 概念——任何 value 跟任何 value 之间都可以互相转移而不会出问题。
-- 为一个两状态问题提前建一个每个 state 一个 class 的方案；那是 class explosion，不是建模。
+- 没有分支且没有非法步骤概念的简单线性流程。
+- 微小、明显的分支，布尔字段或单个 `if` 已经读起来很清晰。
+- 没有真正的非法状态概念——任何值可以跟随任何其他值而不会造成损害。
+- 为两状态问题预构建每个状态的类；那是类的爆炸，不是建模。
 
 ## 典型实现
 
-- **Enum + transition table** — 一个 `dict[(State, Event), State]`。规则稳定时，这是最清晰的默认方案。易于一眼审查，也极易测试。
-- **Pure reducer** — 一个没有副作用的 `(state, event) -> new_state` 函数，因此 imperative shell 负责 actions。它与 [functional-core.md](./functional-core.md) 天然搭配。
-- **`match`/`case`** — 适合局部、结构化且分支不多的 transitions。它是表达 transitions 的语法，而不是 state machine 本身。
-- **Dispatch map** — 当每个 event 都带有不同的处理 logic 时，使用 `dict[Event, Callable]`。
-- **State objects（GoF State）** — 当每个 state 确实有大量差异化 behavior 时适用（connection states、editor modes、protocol phases）。
-- **Library / workflow engine** — 当你真的需要 persistence、visualization 或 dynamic configuration 时才使用，而不是为了想象中的需求。
+- **枚举 + 转换表**——`dict[(State, Event), State]`。规则稳定时最清晰的默认选择。一目了然，易于测试。
+- **纯归约器**——函数 `(state, event) -> new_state`，没有副作用，因此命令式外壳执行动作。与 [functional-core.md](./functional-core.md) 自然配对。
+- **`match`/`case`**——适用于具有适度分支的本地结构化转换。它是表达转换的语法，而不是状态机本身。
+- **分发映射**——当每个事件带有不同的处理逻辑时使用 `dict[Event, Callable]`。
+- **状态对象（GoF State）**——当每个状态确实具有大量不同行为时（连接状态、编辑器模式、协议阶段）。
+- **库/工作流引擎**——当你需要持久化、可视化或动态配置，并且确实有这种需求（不是投机）时。
 
 ## 状态设计
 
-- States 必须**互斥**。如果两个状态可以同时为真，那它们就不是同一个 machine 的 states，而是两个 machine，或者两个维度。
-- 用**domain terms** 命名 states（`awaiting_payment`），而不是 implementation terms（`flag2_set`）。
-- **避免把 boolean 组合当作隐式 state。** `is_active`、`is_locked`、`has_failed`、`is_retrying` 这四个独立 booleans 会编码出 16 种组合，其中大多数是非法的，也没有定义。把它们收敛到一个命名的 state enum 里。
-- 将 **events** 建模为动词或事实（`pay`、`OrderPaid`），与 states 区分开。把两者混为一谈（“the `paying` event”）是模型混乱的迹象。
+- 状态必须是**互斥的**。如果两个可以同时为真，它们不是一个机器的状态——它们是两个机器或两个维度。
+- 用**领域术语**命名状态（`awaiting_payment`），而不是用实现术语（`flag2_set`）。
+- **避免布尔组合作为隐式状态。** `is_active`、`is_locked`、`has_failed`、`is_retrying` 作为四个独立布尔值编码了 16 种组合，其中大部分是非法的且没有定义。将它们折叠成一个命名的状态枚举。
+- 将**事件建模为动词或事实**（`pay`、`OrderPaid`），与状态区分。混淆两者（"`paying` 事件"）是模型混乱的迹象。
 
-## Transition Table / Diagram
+## 转换表/图
 
-每个非平凡 workflow 都应该有显式的 transition table 或 diagram。它可以是代码（程序实际执行的字面 dict）或文档（Markdown table 或 state diagram）。代码形式最好，因为它不会和行为漂移。重点是：任何人都能一次性看到全部合法移动，并问一句“这完整吗？这正确吗？”，而不必沿着散落在代码库各处的条件判断追踪。
+每个非平凡的工作流都值得一个显式的转换表或图。它可以是代码（程序执行的字面字典）或文档（Markdown 表格或状态图）。代码形式最好，因为它不会偏离行为。关键在于，有人可以在一个地方看到整个合法移动集，并问"这是完整的吗？这是正确的吗？"而无需追踪代码库中分散的条件。
 
 ```python
 from enum import StrEnum
@@ -88,23 +88,23 @@ def apply_event(state: Order, event: Event) -> Order:
         raise InvalidTransition(f"{state} cannot handle {event}") from exc
 ```
 
-## Review Model
+## 审查模型
 
-审查 state machine 时，按以下顺序分三遍看：
+按顺序分三遍审查状态机：
 
-1. **Completeness** — 是否枚举了所有 states？所有 events？每个 `(state, event)` 对是否都对应一个有意的 transition 或有意的 rejection？terminal states 是否被识别出来（`closed`、`cancelled` 不再接受后续输入）？
-2. **Correctness** — guards 是否正确且完备？actions 是否幂等，以避免重放或重试的 event 造成双扣费或重复发送？并发应用是否安全（两个 events 是否会在同一实体上竞争）？
-3. **Representation** — 只有到这一步，才讨论 table、`match` 还是 state objects 更适合表达它。先把 model 做对，再争论形式。
+1. **完整性**——所有状态都枚举了吗？所有事件？每个 `(state, event)` 对要么是有意的转换，要么是有意的拒绝？终止状态是否已标识（`closed`、`cancelled` 不再接受任何内容）？
+2. **正确性**——守卫正确且完备吗？动作是否幂等，使得重放或重试的事件不会重复扣费或重复发送？并发应用安全吗（两个事件在同一实体上竞争）？
+3. **表示**——只有这样才问，表、`match` 或状态对象哪个最能表达它。在争论形式之前先确保模型正确。
 
-## 识别信号
+## 快速信号
 
-当你看到这些情况时，就该考虑这个模型：
+当你看到以下情况时，使用此模型：
 
-- status strings 在散落各处被赋值，却没有一个地方定义合法集合。
-- Boolean flags 的组合在充当 state，而且没有强制的合法组合。
-- `if/elif` ladders 同时检查 current state 和 incoming event，并在多个 function 中重复出现。
-- 重复的 event 导致重复的 side effects——这说明 actions 不是幂等的，transitions 也没有被正确门控。
+- 状态字符串在分散的地方赋值，没有合法集的单一规范。
+- 布尔标志的组合代替状态，没有强制执行的合法组合。
+- `if/elif` 阶梯同时检查当前状态*和*传入事件，在多个函数中重复。
+- 重复事件导致重复效果——这表明动作不是幂等的，转换没有门控。
 
-## 误判边界
+## 误报边界
 
-单独一个 status enum **并不是** state machine——在有 transition rules 管理它如何变化之前，它只是一个命名值。把 transition table 加到真正极其简单的分支里，是过度设计；如果只有一条显而易见的线性路径，也不存在非法 state 问题，那么 table 就只是 ceremony。这个模型只有在非法 transitions 真实存在、正确性重要时才值得。把它用在那里，而不是每个出现 status field 的地方。关于 state 和 behavior 何时适合放进 object，见 [object-oriented.md](./object-oriented.md)；关于 table 形式为什么如此易于审查，见 [declarative.md](./declarative.md)。
+单独的状态枚举**不是**状态机——在存在控制状态如何变化的转换规则之前，它只是一个命名的值。为真正微不足道的分支添加转换表是过度设计；如果只有一个明显的线性路径且没有非法状态问题，这张表就是仪式。当非法转换是真实的且正确性很重要时，这个模型才值得使用。在那些地方应用它，而不是在每个状态字段出现的地方。参见 [object-oriented.md](./object-oriented.md) 了解何时状态加行为属于对象，以及 [declarative.md](./declarative.md) 了解为什么表的形式如此易于审查。

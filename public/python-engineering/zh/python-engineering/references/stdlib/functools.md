@@ -1,10 +1,10 @@
 # functools
 
-`functools` 提供高阶 helpers：接收或返回函数的工具。它们减少了分派、部分应用、memoization 和 decorator 编写中的样板代码。下面每个 helper 都针对不同需求；当手工替代方案更容易出错时再使用它们，而不是默认就用。
+`functools` 提供高阶辅助工具：接受或返回函数的工具。它们减少了围绕分发、偏函数应用、记忆化和装饰器编写的样板代码。下面的每个辅助工具解决不同的需求；当手动替代方案更容易出错时才使用它们，而不是默认使用。
 
 ## singledispatch
 
-`@singledispatch` 会把一个函数变成 generic function，根据其 _第一个_ 参数的运行时类型选择实现。可以通过 `.register` 注册类型特定变体：
+`@singledispatch` 将一个函数转换为泛型函数（generic function），根据其*第一个*参数的运行时类型选择实现。使用 `.register` 注册类型特定的变体：
 
 ```python
 from functools import singledispatch
@@ -22,11 +22,11 @@ def _(value: list) -> str:
     return "[" + ", ".join(render(v) for v in value) + "]"
 ```
 
-自 Python 3.11 起，注册的 annotation 可以是 union（`int | float`），这样一次注册就能覆盖一类类型。`singledispatch` 适合开放扩展：新类型可以添加 handler，而无需编辑中心函数 - 这是一种轻量 visitor。它 _不会_ 根据第二个参数、字段值或组合来分派；那些情况需要显式分支、`match`，或 dispatch map。方法应使用 `singledispatchmethod`。基础实现应当有意义（合理的默认行为或清晰的错误），因为当没有注册类型匹配时，它就会被调用。
+自 Python 3.11 起，注册的注解可以是联合类型（`int | float`），一次注册覆盖一个类型家族。`singledispatch` 适用于开放扩展，即新类型无需编辑中央函数即可添加处理程序——这是一种轻量级的访问者模式。它不根据第二个参数、字段值或组合进行分发；这些需要显式分支、`match` 或分发映射。对于方法，使用 `singledispatchmethod`。保持基本实现有意义（一个合理的默认值或清晰的错误），因为当没有已注册的类型匹配时它就会运行。
 
 ## partial
 
-`partial` 会为 callable 绑定一部分参数，生成一个只需要剩余参数的新 callable。它可以在没有 wrapper `lambda` 或 closure 的情况下捕获上下文：
+`partial` 绑定可调用对象的部分参数，生成一个只需要其余参数的新可调用对象。它无需包装 `lambda` 或闭包即可捕获上下文：
 
 ```python
 from functools import partial
@@ -37,11 +37,11 @@ connect_local = partial(connect, "localhost", timeout=5.0)
 conn = connect_local(8080)
 ```
 
-当你只是固定参数时，优先使用 `partial` 而不是 `lambda` - 它是可 pickle 的、可 introspect 的（`.func`、`.args`、`.keywords`），并且表达的是意图。类型检查器对复杂签名下的 `partial` 结果推断并不完美，因此当推断类型不清晰时，应在绑定位置加注解。它适合 callbacks、依赖注入，以及为特定调用点配置通用函数；不要把许多 `partial` 叠成一条难以理解的链。
+当你只是固定参数时，优先使用 `partial` 而非 `lambda`——它是可 pickle 的、可内省的（`.func`、`.args`、`.keywords`），并且读起来就是意图。对于复杂签名，类型检查器推断 `partial` 结果不完美，因此在推断类型不明确时注解绑定点。将其用于回调、依赖注入和为特定调用点配置泛型函数；避免将许多 `partial` 堆叠成不透明的链条。
 
 ## lru_cache / cache
 
-`@lru_cache(maxsize=...)` 会按参数对结果做 memoize；`@cache`（3.9+）等价于 `lru_cache(maxsize=None)` - 即无上限 memo。它们能加速纯函数、且带有可哈希参数的重复调用：
+`@lru_cache(maxsize=...)` 以参数为键记忆化结果；`@cache`（3.9+）是 `lru_cache(maxsize=None)`——一个无界记忆化。它们加速具有可哈希参数的纯函数，且这些函数被重复调用：
 
 ```python
 from functools import cache
@@ -51,24 +51,24 @@ def factorial(n: int) -> int:
     return 1 if n <= 1 else n * factorial(n - 1)
 ```
 
-只有当函数是 referentially transparent 时，cache 才是正确的：相同输入，相同输出，没有可观察的副作用。对非纯函数（读文件、时钟、可变全局状态）做缓存，会掩盖过时数据的 bug。还有两个风险：在长期运行进程上使用无上限 `@cache` 会造成内存泄漏，而把 cache 放在 method 或任何持有 object 引用的函数上，会让该 object 一直存活。参数必须可哈希，因此像 list 或 dict 这样的不可哈希输入无法直接缓存，必须先转换。当输入种类很多时，用 `lru_cache(maxsize=...)` 限制大小，并在测试中暴露 `.cache_clear()`。
+缓存仅在函数引用透明时才是正确的：相同输入、相同输出、无可观察的副作用。缓存不纯函数（读取文件、时钟、可变全局变量）会隐藏陈旧性错误。另外两个隐患：长时间运行进程上的无界 `@cache` 是内存泄漏；方法或持有对象引用的任何函数上的缓存会保持该对象存活。参数必须是可哈希的，因此列表或字典等不可哈希的输入在未转换时不能被缓存。当输入种类繁多时，使用 `lru_cache(maxsize=...)` 限制大小，并暴露 `.cache_clear()` 以供测试。
 
 ## reduce
 
-`reduce` 会把一个 binary function 在 iterable 上折叠成单一值。对于那些没有内建函数可用的真正聚合场景，它是可读的：
+`reduce` 将二元函数折叠到可迭代对象上，生成单个值。对于没有内置函数的真正累积操作，它是可读的：
 
 ```python
 from functools import reduce
 from operator import or_
 
-merged = reduce(or_, dict_list, {})  # union of many dicts
+merged = reduce(or_, dict_list, {})  # 多个字典的并集
 ```
 
-如果已经有普通 `for` loop 或内建函数（`sum`、`math.prod`、`any`、`all`、`"".join`），就优先用它们 - 对大多数读者来说更清楚。`reduce` 只有在 associative 组合场景中才值得使用，即在 loop 里给中间 accumulator 起名并不会更清楚的时候。`reduce` 中嵌套的 `lambda` 往往是一个信号：该改回显式 loop 了。
+当存在普通的 `for` 循环或内置函数（`sum`、`math.prod`、`any`、`all`、`"".join`）时，优先使用它们——对大多数读者来说更清晰。`reduce` 仅适用于结合性组合，其中在循环中命名运行中的累加器并不会增加清晰度。`reduce` 内嵌套的 `lambda` 通常是一个信号，表明应切换回显式循环。
 
 ## wraps
 
-`@wraps(func)` 会把被包装函数的身份（`__name__`、`__doc__`、`__module__`、`__qualname__`、`__annotations__` 和 `__wrapped__`）复制到 wrapper 上。每一个手写且返回内部函数的 decorator 都应当应用它：
+`@wraps(func)` 将被包装函数的身份（`__name__`、`__doc__`、`__module__`、`__qualname__`、`__annotations__` 和 `__wrapped__`）复制到包装器上。每个返回内部函数的手写装饰器都应使用它：
 
 ```python
 from functools import wraps
@@ -80,4 +80,4 @@ def logged(func):
     return wrapper
 ```
 
-如果没有 `wraps`，introspection、文档工具、`help()` 和测试报告看到的都会是 wrapper 的身份，而不是原始函数。`__wrapped__` 也让工具可以解开到底层函数。更广泛的 decorator 机制见 [`../grammar/decorator.md`](../grammar/decorator.md)。
+没有 `wraps`，内省、文档工具、`help()` 和测试报告都会看到包装器的身份而不是原始对象的身份。`__wrapped__` 还允许工具解包到底层函数。参见 [`decorator`](references/grammar/decorator.md) 了解其支持的更广泛的装饰器机制。

@@ -1,48 +1,73 @@
-# Domain-Driven Design Essentials
+# 领域驱动设计要点（Domain-Driven Design Essentials）
 
-Domain-Driven Design（DDD）是一种围绕领域本身的语言和边界来建模复杂业务领域的方法，而不是围绕数据库表或框架文件夹来建模。本文覆盖最能改善代码组织和命名的概念。它不能替代完整的 DDD 文献，而且大多数项目只需要其中一部分。
+领域驱动设计（DDD）是一种围绕领域本身的语言和边界来建模复杂业务领域的方法，而不是围绕数据库表
+或框架文件夹。本文档涵盖了对代码组织和命名最有改进作用的概念。它不是完整 DDD 文献的替代品，
+大多数项目只需要其中的一个子集。
 
-核心前提是：在真正复杂的业务软件中，难点不是技术，而是领域——它的词汇、规则、不变量，以及子领域之间的边界。与这些概念相映射的代码，更容易讨论、修改并保持正确。
+核心前提：在真正复杂的业务软件中，困难的部分不是技术，而是领域——它的词汇、它的规则、它的不变量，
+以及子领域之间的边界。镜像这些概念的代码更容易讨论、修改和保持正确。
 
-## Ubiquitous language
+## 通用语言（Ubiquitous Language）
 
-一套在领域专家、代码、测试和讨论中一致使用的共享词汇。如果业务说的是 “settlement”，那么类就该叫 `Settlement`，而不是 `PaymentRecord`。其收益是减少翻译成本：会议里用的词和代码里的词一致时，误解更不容易滑到生产环境。这是 DDD 中最具可移植性的一部分——即使是小项目，也能从按领域语言命名中获益。
+领域专家、代码、测试和对话中一致使用的单一共享词汇。如果业务方说"结算（settlement）"，
+类名就是 `Settlement`，而不是 `PaymentRecord`。其回报是降低了翻译成本：当会议中的词与代码中的词
+一致时，更少的误解能存活到生产环境中。这是 DDD 中最具可移植性的一块——即使是一个小项目也能从
+用领域命名的方式命名事物中受益。
 
-## Bounded contexts
+## 限界上下文（Bounded Contexts）
 
-bounded context 是一个边界，在这个边界内模型和语言保持一致。同一个词在不同 context 里可以有不同含义：“Customer” 在 billing 中是一个带有付款条款的 account，在 support 中则是一个有工单历史的人。强行把它们塞进一个共享模型，只会制造两边都不顺手的缠结。bounded context 让每个子领域保持自己的连贯模型，并在 seam 处显式翻译。这与 [Single Responsibility](./solid.md) 一致：一个 context 只有一个变更来源，因为它只对业务中的一部分负责。
+限界上下文是一个边界，在该边界内模型及其语言是一致的。同一个词在不同的上下文中可以有不同含义：
+计费中的"客户（Customer）"（一个有支付条款的账户）与支持中的"客户"（一个有工单历史的人）
+不是同一个模型。将它们强加到一个共享模型中会产生一个对两者都不利的纠缠。限界上下文让每个子领域
+保持自己一致的模型，在接缝处进行显式的翻译。这与[单一职责](./solid.md)一致：一个上下文有一个
+变更来源，因为它响应业务的一个部分。
 
-## Entities 和 value objects
+## 实体（Entity）和值对象（Value Object）
 
-用 identity 区分的两类 domain data：
+建模领域数据的两种方式，通过身份来区分：
 
-- **Entity.** 具有在属性变化后仍然延续的独立 identity。`User` 即使修改了 name 和 email，仍然是同一个 user；决定 equality 的是 identity，而不是字段值。Entity 有 lifecycle。
-- **Value object.** 完全由其属性定义，没有自身 identity。`Money`、`DateRange`、`Address`——两个字段相同的 value object 可以互换。Value object 天然适合 immutability，这会消除大量 aliasing bug。
+- **实体（Entity）。** 具有在属性变化中持续存在的独特身份。一个 `User` 即使更改了姓名和电子邮件
+  仍然是同一个用户；身份（而非字段值）定义了相等性。实体有生命周期。
+- **值对象（Value Object）。** 完全由其属性定义，没有自己的身份。一个 `Money` 金额、`DateRange`、
+  `Address`——两个字段相等的值对象是可互换的。值对象天然是不可变的，这消除了大量别名相关的 bug。
 
-把某样东西建模为 value object，而不是裸 primitive，是 DDD 里收益最高的动作之一。用 `Money` value object 替换 `dict[str, Any]` 或松散的 `(amount, currency)` tuple，可以修复 [primitive obsession](../refactoring/index.md)，并给 invariants 找到落点。
+将某物建模为值对象而不是原始基本类型（primitives）是 DDD 中杠杆率最高的操作之一。将
+`dict[str, Any]` 或松散的 `(amount, currency)` 元组替换为 `Money` 值对象可以修复
+[基本类型痴迷](references/refactoring/index.md)并为不变量提供了一个家。
 
-## Aggregates
+## 聚合（Aggregates）
 
-aggregate 是一组 entities 和 value objects，被当作一个整体来变更，其中一个 entity 是 **aggregate root**。外部代码只引用 root；root 负责强制执行跨整个 cluster 的 invariants，并作为 transaction boundary。例如，`Order` aggregate 拥有它的 `LineItem`s；你不会直接修改某个 line item，而是通过 order 进行，这样 order 就能强制诸如“总额不能超过 credit limit”之类的规则。aggregate 是 [Tell, Don't Ask](./tell-dont-ask.md) 和 [Information Expert](./grasp.md) 启发式真正落地的地方——规则和它所治理的数据待在一起。
+聚合是作为变更的一个单元处理的一组实体和值对象，其中一个实体作为**聚合根（aggregate root）**。
+外部代码只引用根；根执行跨越集群的不变量，并且是事务边界。例如，一个 `Order` 聚合拥有其
+`LineItem`；你不直接修改行项目，而是通过订单进行，订单可以执行"总额不能超过信用额度"之类的规则。
+聚合是[告诉，不要问](./tell-dont-ask.md)和[信息专家](./grasp.md)启发法变得具体的地方——
+规则与其管辖的数据共存。
 
-## Domain events
+## 领域事件（Domain Events）
 
-domain event 记录领域中发生了有意义的事情——`OrderPlaced`、`PaymentReceived`。事件让副作用和跨 context 的响应变得显式且解耦：order context 发布 `OrderPlaced`，而不需要知道 shipping 和 analytics 都在监听。只有当响应确实跨边界时才使用它们；不要为了用而把每一次状态变化都变成事件。
+领域事件记录领域中发生了有意义的事情——`OrderPlaced`、`PaymentReceived`。事件使副作用和跨上下文
+的反应变得显式和解耦：订单上下文宣布 `OrderPlaced`，而不需要知道物流和分析都在监听。当反应真正
+跨越边界时使用它们；不要为了事件本身而将每个状态变化都变成事件。
 
-## Anti-corruption layer
+## 防腐层（Anti-corruption Layer）
 
-当与外部系统或 legacy model 集成，而它们的概念与你的不一致时，anti-corruption layer（ACL）负责在两者之间翻译，避免 foreign model 渗入你的 clean domain。它是 [Adapter](../design-patterns/adapter.md) 模式在领域层面的应用：ACL 在内部说你的 ubiquitous language，在外部说外部系统的语言。这样可以保护 core model 不被外部命名和结构污染。
+当与外部系统或其概念与你不同的遗留模型集成时，防腐层（ACL）在两者之间进行翻译，使外部模型不会
+泄露到你的干净领域中。它是[适配器](references/design-patterns/adapter.md)模式的领域聚焦应用：
+ACL 在内部使用你的通用语言，在外部使用外部系统的语言。这保护了核心模型免受外部命名和结构的污染。
 
-## 什么时候不要应用 DDD
+## 何时不应用 DDD
 
-DDD 的完整机制——aggregate、repository、domain service、unit of work——成本很高，只有在真正的领域复杂度下才值得。把它用在简单 CRUD、脚本或小工具上，就是过度设计（[YAGNI](./yagni.md)）。常见的两种失败模式：
+DDD 的完整机制——聚合、仓库、领域服务、工作单元——是昂贵的，并且只有在真正的领域复杂度下才合理。
+将其应用于简单的 CRUD、脚本或小工具是过度工程化（[YAGNI](./yagni.md)）。两种常见失败模式：
 
-- **Folder cosplay.** 创建 `domain/`、`application/`、`infrastructure/` 目录，并不能让设计变得 domain-driven；它只是在别处搬运同样的逻辑。
-- **Anemic model.** Entity 只是裸字段袋，所有规则都放在 service class 里。这与 DDD 的初衷相反，也放弃了它最主要的收益。
+- **文件夹角色扮演。** 创建 `domain/`、`application/`、`infrastructure/` 目录并不能使设计变成
+  领域驱动；它只是将同样的逻辑搬了个地方。
+- **贫血模型（Anemic models）。** 实体是裸字段袋，所有规则驻留在服务类中。这与 DDD 的意图相反，
+  放弃了主要的好处。
 
 ## 在 Python 中
 
-- 小项目可以只借用 ubiquitous language、value object 和 invariant 思维，而不必采用完整的分层架构。
-- Value object 很适合映射到 `dataclass(frozen=True)`、`attrs`、Pydantic model 或普通 class。
-- Entity 不一定就是 ORM class。当持久化关注点扭曲了模型时，应将 domain model 与 persistence model 分开。
-- 只有在你确实需要 transaction boundary、存储的 test double，或与 ORM 隔离时，才引入 repository 和 unit of work，而不是默认就上。
+- 小项目可以不使用完整的分层架构，仅借用通用语言、值对象和不变量思维。
+- 值对象可以很好地映射为 `dataclass(frozen=True)`、`attrs`、Pydantic 模型或普通类。
+- 实体不一定是 ORM 类。当持久化关注点扭曲模型时，将领域模型与持久化模型分离。
+- 仅当你确实需要事务边界、存储的测试替身或与 ORM 的隔离时才引入仓库和工作单元——而不是默认这样做。

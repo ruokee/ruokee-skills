@@ -1,44 +1,66 @@
-# Composition over Inheritance
+# 组合优于继承（Composition over Inheritance）
 
-优先通过把更小的部分组装起来来组织行为——对象、函数、委托——而不是通过从 base class 继承实现。这里的建议是“优先”，不是“禁止”：inheritance 也有真正的用途，但它常常被过度使用为默认的复用机制，而 composition 通常是更灵活、耦合更低的选择。
+优先选择从更小的部分——对象、函数、委托——组装行为，而不是从基类继承实现。这里的指导是"优先"，
+而非"禁止"：继承有其实际用途，但它被过度用作默认的复用机制，而组合通常是更灵活、更低耦合的选择。
 
-## 为什么 inheritance 会带来耦合
+## 为什么继承会产生耦合
 
-Class inheritance 把两件在逻辑上独立的东西捆绑到一起：_实现复用_（subclass 得到 base class 的代码）和 _subtype substitutability_（subclass 的实例应当能在需要 base type 的地方工作，参见 [Liskov substitution](./solid.md)）。当你只是为了复用代码而继承时，你也同时继承了遵守 base contract 的义务，以及 base class 每一次变化都会带来的暴露面。
+类继承捆绑了两个逻辑上分离的东西：*实现复用*（子类获得基类的代码）和*子类型可替换性*
+（子类的实例应能在任何期望基类型的地方工作——参见[里氏替换](./solid.md)）。
+当你仅仅为了复用代码而继承时，你也继承了遵守基类契约的义务，以及暴露于基类中每次变更的风险。
 
-这会产生 _fragile base class_ 问题：base class 的修改可能以很难看出的方式破坏 subclass，因为 subclass 依赖的是 base class 的内部行为，而不只是它的公共接口。深层级的 hierarchy 会放大这个问题——行为分散在多层之中，要理解一个类就得读它所有祖先。
+这产生了*脆弱基类（fragile base class）*问题：对基类的更改可能以难以察觉的方式破坏子类，
+因为子类不仅依赖于基类的公共接口，还依赖于其内部行为。深层层次结构放大了这一点——
+行为散布在多个层级上，理解一个类意味着阅读其所有祖先。
 
-Composition 耦合更松。持有某个 collaborator 的对象只依赖这个 collaborator 的接口，并且可以在不改变自身 type 的情况下切换 collaborator。由 composition 组成的设计，变更半径更小，也更局部。
+组合的耦合更松散。持有协作者的对象只依赖于该协作者的接口，并且可以在不改变自身类型的情况下
+替换协作者。组合设计的变更半径更小、更局部。
 
-## 什么时候 inheritance 是合适的
+## 何时继承是合适的
 
-- **真正的 is-a，且 contract 稳定。** 当 subtype 确实是 base 的一种 specialization，并且能够遵守 base 的每一项承诺（Liskov）时，inheritance 能忠实地建模这种关系。异常层次是一个干净的例子：`class TimeoutError(NetworkError)` 表达了 `except` 子句会用到的真实分类。
-- **框架扩展点。** 许多框架就是设计成通过 subclassing 提供扩展（例如 Django view、`unittest.TestCase`）。在这里 inheritance 是框架指定的 hook，违背它反而徒增阻力。
-- **小而稳定的抽象接口。** 继承一个定义了狭窄 contract（并且几乎不包含实现）的 abstract base，更接近接口实现，而不是实现继承，耦合也更低。
+- **真正的 is-a 关系且契约稳定。** 当子类型确实是基类型的特化，并且能遵守基类型的每一个承诺
+  （里氏替换）时，继承忠实地建模了这种关系。异常层次结构是一个清晰的例子：
+  `class TimeoutError(NetworkError)` 表达了 `except` 子句使用的真实分类。
+- **框架扩展点。** 许多框架设计为通过子类化提供的基类来扩展（Django 视图、`unittest.TestCase`）。
+  这里继承是框架指定的钩子，对抗它会增加摩擦而没有收益。
+- **小型、稳定的抽象接口。** 从定义了窄契约（且很少或没有实现）的抽象基类继承更接近
+  接口实现而非实现继承，并且承载的耦合更少。
 
-共同点是：当你想要 substitutability 且 contract 稳定时再继承，而不是为了只是复用几个方法。
+共同主线：当你想要可替换性且契约稳定时继承，而不是仅仅想要复用几个方法时。
 
-## Python 的 mixin 文化及其风险
+## Python 的 Mixin 文化及其风险
 
-Python 支持 multiple inheritance，mixin 也是常见习惯：小的 class 给 host class 增加一段行为。用得好时——小、无状态、命名清晰、仅依赖 host 已文档化的接口——它们是合理的。用得不好时则会出大问题：
+Python 支持多重继承，mixin 是一种常见的惯用模式：小型类向宿主类添加一部分行为。使用得当——
+小型、无状态、命名清晰、仅依赖于宿主有文档记录的接口——它们是合理的。使用不当它们会引起真正的麻烦：
 
-- **隐式状态和初始化顺序。** 一个 mixin 如果设置 attributes 或要求以某种特定顺序调用 `super().__init__()`，它就会在无形中与 host 以及其他 mixin 耦合。method resolution order（MRO）决定执行顺序，而多 mixin class 很难推理。
-- **命名冲突。** 多个 mixin 定义或期望相同的 attribute 或 method 名称时，会通过 MRO 产生微妙交互。
+- **隐式状态和初始化顺序。** 一个设置属性或期望 `super().__init__()` 按特定顺序调用的 mixin
+  会不可见地与宿主和其他 mixin 耦合。方法解析顺序（MRO）决定了何时运行什么，多 mixin 的类
+  可能难以推理。
+- **名称冲突。** 多个 mixin 定义或期望相同的属性或方法名会通过 MRO 以微妙的方式交互。
 
-让 mixin 保持小、无状态，并且名字要说明它们增加了什么。如果一个 mixin 需要大量状态或特定的 init 顺序，那就是该改用 composition 的信号。
+保持 mixin 小型、无状态，并以它们添加的内容来命名。如果一个 mixin 需要大量状态或特定的
+初始化顺序，那就是该使用组合的信号。
 
-## Protocol 作为 ABC inheritance 的替代方案
+## Protocol 作为 ABC 继承的替代方案
 
-当目标是“这个对象必须支持这些方法”时，Python 的 `typing.Protocol` 可以让你用结构化方式表达，而不必建立 inheritance 关系。一个 class 只要有正确的方法就满足 Protocol，不必继承它。这带来了接口的 type-checking 价值，以及 [Interface Segregation](./solid.md) 的窄、由调用方定义的 contract 优势，同时没有共享 base class 带来的耦合。只有在你只是描述一种能力，而不是共享实现时，优先使用 Protocol 而不是 abstract base class inheritance。另见 [dependency-inversion](./dependency-inversion.md)。
+当目标是"这个对象必须支持这些方法"时，Python 的 `typing.Protocol` 让你在不建立继承关系的情况
+下以结构化的方式表达这一点。一个类通过拥有正确的方法来满足 Protocol；它不需要继承自它。
+这为你提供了接口的类型检查好处和窄的、调用者定义的契约的[接口隔离](./solid.md)好处，
+而没有共享基类的耦合。当你只需要描述能力而不需要共享实现时，优先选择 Protocol 而非
+抽象基类继承。另见 [dependency-inversion](./dependency-inversion.md)。
 
 ## 常见错误
 
-- **彻底禁止 inheritance。** 当框架预期的是 subclassing，或者确实存在稳定的 is-a 关系时，强行用 composition 只会增加样板代码并违背工具本身的使用方式。
-- **透传样板代码。** composition 可能退化成一个对象把十几个方法逐一转发给持有的 collaborator。如果几乎每个方法都只是“一行委托”，就该重新考虑：也许这个 wrapper 之所以存在，是为了收窄或适配接口；也许 caller 应该直接持有这个 collaborator。
-- **假装 subtype 只是为了复用。** 为了拿几个 helper method 而 inheritance，然后把其他方法 override 成 no-op 或 `NotImplementedError`，违反了 Liskov，这正是 composition（或者普通 helper function）才是正确工具的经典信号。
+- **完全禁止继承。** 当框架期望子类化时，或存在真正的稳定 is-a 关系时，硬要用组合
+  会增加模板代码并违背工具的自然倾向。
+- **透传模板代码（Pass-through boilerplate）。** 组合可能退化成一个将十几个方法转发给
+  持有的协作者的对象。如果几乎所有方法都是一行委托，重新考虑：也许包装器通过缩窄或适配接口
+  来证明其存在价值，或者调用者应该直接持有协作者。
+- **为复用而假装子类型。** 为了获取几个辅助方法而继承，然后将其他方法覆盖为 no-op 或
+  `NotImplementedError`，违反了里氏替换，并且是组合（或普通辅助函数）才应是正确工具的经典标志。
 
 ## 在 Python 中
 
-- 默认用 functions、constructor parameters、Protocols、strategy objects 和 delegation 来做复用与变化。
-- 只有在 exception hierarchy、framework hooks、真正稳定的 abstractions，以及少数清晰的小 mixin 场景下才保留 inheritance。
-- 对共享代码，优先使用 module-level helper function 或 composition 出来的 collaborator，而不是一个仅仅为了放共享 method 的 base class。
+- 默认使用函数、构造函数参数、Protocol、策略对象和委托来实现复用和变化。
+- 将继承保留给异常层次结构、框架钩子、真正稳定的抽象，以及少数小型、清晰的 mixin。
+- 对于共享代码，优先选择模块级辅助函数或组合的协作者，而不是仅为了持有共享方法而存在的基类。

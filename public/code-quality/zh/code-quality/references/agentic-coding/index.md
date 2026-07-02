@@ -1,7 +1,7 @@
-# Agentic Coding
+# 智能体编码（Agentic Coding）
 
-关于 AI agent 配置质量的参考文档——也就是塑造 agent 行为的那些文件：`AGENTS.md`、`CLAUDE.md`、SKILL 文件、prompt rules、permission manifests 以及 workflow docs。这里关注的是配置表面，而不是 agent 产出的代码。产出代码里的 smell（长函数、重复知识、thin wrapper、投机性泛化）属于 `../refactoring/` 和 `../design-principles/`；这个目录讨论的是最初驱动 agent 的那些指令、上下文和引用。
+关于 *AI 智能体配置*质量的参考文档——即塑造智能体行为的文件：`AGENTS.md`、`CLAUDE.md`、SKILL 文件、提示规则、权限清单和工作流文档。这里的主题是配置表面，而不是智能体生成的代码。生成的代码中的坏味道（长函数、重复知识、薄包装器、投机通用性）属于 `references/refactoring/` 和 `references/design-principles/`；本目录是关于首先驱动智能体的指令、上下文和引用。
 
-前提是：agent 的配置本身也是一个工程产物，也有自己的失效模式。context 是有预算的，指令会互相冲突，引用会失效，模板会老化。这些问题会悄悄降低 agent 表现——agent 仍然在运行，只是它推理所依据的输入更嘈杂或更陈旧——因此它们也需要像生产代码一样被认真 review。
+前提是智能体的配置本身就是一个工程制品，有其自己的失败模式。上下文是一个预算，指令可能矛盾，引用可能失效，模板会腐化。这些问题会悄无声息地降低智能体性能——智能体仍然运行，但它是在更嘈杂或过时的输入上进行推理——因此它们需要与生产代码相同的刻意审查。
 
-所有内容都放在一个文档里：[config-smells.md](./config-smells.md)。它把每种失效模式都视作 Fowler 意义上的 smell——一种值得调查的表面症状，而不是自动判死刑的缺陷。只要你在 review 或编写任何面向 agent 的配置，就应路由到这里。
+所有内容都在一份文档中：[config-smells.md](./config-smells.md)。它将每种失败模式视为 Fowler 意义上的坏味道——一个值得调查的表面症状，而不是一个自动的缺陷。在审查或编写任何面向智能体的配置时，请参考该文档。

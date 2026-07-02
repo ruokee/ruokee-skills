@@ -1,49 +1,49 @@
-# State Pattern (GoF)
+# 状态模式（State Pattern, GoF）
 
-GoF State Pattern 通过把状态相关行为委托给多态的 state object，来消除条件逻辑。Context 持有一个当前 State 对象的引用。每个具体 State class 都实现同一接口，提供该状态下特有的行为。State transition 会替换 Context 当前的 state 引用。
+GoF 状态模式通过将逻辑委托给多态状态对象来消除依赖于状态的条件逻辑。上下文（Context）持有对当前状态对象的引用。每个具体状态类实现相同的接口，提供该状态特有的行为。状态转换替换上下文的当前状态引用。
 
-这是 state-machine 行为的一种特定 OO 实现。它并不等同于广义上的 state machine - 很多 state machine 用更简单的表示方式会更好：enum + transition table、reducer function、`match`/`case` 或 dispatch map。在决定 State Pattern 是否比更简单的实现更有价值之前，始终先从 [state-machine modeling](../programming-paradigms/state-machine.md) 开始，明确 states、events、transitions、guards 和非法 transition 策略。
+这是状态机行为的一种特定的面向对象实现。它并不等同于一般的状态机——许多状态机更适合用更简单的表示形式：枚举加转换表、归约函数、`match`/`case` 或分发映射。在决定状态模式是否比简单实现更有价值之前，始终从[状态机建模](references/programming-paradigms/state-machine.md)开始，以定义状态、事件、转换、守卫和无效转换策略。
 
 ## 结构
 
-- Context：维护对 ConcreteState 的引用；委托状态相关请求。
-- State（interface/Protocol）：定义状态相关行为的接口。
-- ConcreteState：实现某个特定状态的行为；可通过替换 Context 的 state 引用来触发 transition。
+- 上下文（Context）：维护对具体状态（ConcreteState）的引用；委托依赖于状态的请求。
+- 状态（State, 接口/Protocol）：定义依赖于状态的行为的接口。
+- 具体状态（ConcreteState）：实现特定状态的行为；可能通过替换上下文的当前状态引用来触发转换。
 
-## 何时适合这个模式
+## 模式适用时
 
-- 每个 state 都有大量、明确不同的行为 - 不只是返回值不同或者一个 flag 不同。
-- state 数量中等，并且相对稳定。
-- state-specific 行为足够复杂，拆成 class 之后比平铺条件逻辑更容易读。
-- 可以在不修改现有 state class 的前提下新增 state（OCP 收益）。
-- state object 需要访问 Context 数据来完成它的行为。
+- 每个状态有大量独特的行为——而不仅仅是不同的返回值或标志。
+- 状态数量适中且相对稳定。
+- 状态特定的行为足够复杂，拆分为类可以提高可读性，优于扁平的条件语句。
+- 可以添加新状态而无需修改现有状态类（开放封闭原则的好处）。
+- 状态对象需要访问上下文数据以执行其行为。
 
-## 何时不适合这个模式
+## 模式不适用时
 
-- state 很少，transition 简单，行为差异也不大。transition table 或 `match` 更清楚。
-- 工作流主要关心的是 transition permissions 和副作用，而不是多态行为。应使用 transition table。
-- state class 退化成围绕单个表达式的一个方法 wrapper - 间接层的成本超过了清晰度收益。
-- state 数量增长很快，或者由数据驱动。基于表的方式扩展性更好。
-- state transition 需要在一个地方可审计。State Pattern 会把 transition 分散到各个具体 state class 中。
+- 状态少、转换简单且行为差异小。转换表或 `match` 更清晰。
+- 工作流主要涉及转换权限和副作用，而非多态行为。请使用转换表。
+- 状态类变成单个表达式周围的琐碎单方法包装器——间接成本超过了清晰性收益。
+- 状态数量快速增长或由数据驱动。基于表的方法扩展性更好。
+- 状态转换需要在一个地方可审计。状态模式将转换分散到具体状态类中。
 
 ## 常见实现问题
 
-**Transition ownership.** 谁来决定下一个 state？如果由每个 ConcreteState 决定，transition 就会散落在不同 class 中，更难审计。如果由 Context 决定，这个模式又可能退化为 Context 里的条件逻辑。应该在同一个 context 边界内一致地选择一种方式。
+**转换所有权。** 谁决定下一个状态？如果每个具体状态自己决定，转换分散在各处，更难审计。如果上下文决定，模式可能退化为上下文中的条件语句。在给定的上下文边界内一致地选择一种方法。
 
-**共享 context 数据。** State object 往往需要访问 Context 数据。可以把 Context 显式传给 state method，或者使用共享数据对象。避免通过全局状态或模块级变量形成隐式耦合。
+**共享上下文数据。** 状态对象通常需要访问上下文数据。将上下文显式传递给状态方法，或使用共享数据对象。避免通过全局状态或模块级变量进行隐藏耦合。
 
-**state identity。** state object 是单例，还是携带每个实例自己的数据？无状态 state object 可以安全共享；有状态的则需要明确的 lifecycle management - 谁创建它们、何时丢弃。
+**状态标识。** 状态对象是单例，还是携带每个实例的数据？无状态的状态对象可以安全共享；有状态的则需要明确的生命周期管理——谁创建它们，何时丢弃。
 
-**测试。** 先针对每个 state class 做独立、聚焦的单元测试，再在 Context 层测试 transition。验证非法 transition 被拒绝，而不是静默忽略。
+**测试。** 用集中的单元测试独立测试每个状态类，然后在上下文层级测试转换。验证非法转换被拒绝，而不是静默忽略。
 
-## 区分 State 与 Strategy
+## 区分状态模式与策略模式
 
-[Strategy](strategy.md) 看起来很像 - 两者都把工作委托给多态对象 - 但它变化的是 _算法_，而不是 _生命周期阶段_。如果对象在其生命周期内不会在不同 strategy 之间切换，那它是 Strategy，不是 State。如果主体经历一系列阶段，并且每个阶段行为都不同，那它就是 State。
+[策略模式](strategy.md)看起来类似——两者都委托给多态对象——但变化的是*算法*而非*生命周期阶段*。如果对象在其生命周期中不转换策略，那就是策略而非状态。如果主体经过一系列阶段，行为随每个阶段变化，那就是状态。
 
-## 区分 State Pattern 与 state machine
+## 区分状态模式与状态机
 
-State Pattern 是一种实现技术。state-machine modeling 是一种设计技术。一个 state machine 可以用 enum + transition table、reducer、`match` block、dispatch map、专门的 library，或者 GoF State Pattern 来实现。只有当每个 state 都承载了足够丰富、值得通过多态分发来表达的行为时，State Pattern 才真正值得。
+状态模式是一种实现技术。状态机建模是一种设计技术。状态机可以实现为枚举加转换表、归约函数、`match` 块、分发映射、专用库*或* GoF 状态模式。状态模式只有在每个状态承载大量行为、能够从多态分发中受益时才值得使用。
 
-如果你只需要跟踪哪些 transition 合法，并在 transition 时执行副作用 - 但每个 state 并不需要丰富的行为接口 - 那么 [transition table](../programming-paradigms/state-machine.md) 更简单，也更便于审计。
+如果你只需要跟踪哪些转换是合法的并在转换时执行副作用——而无需每个状态都具有丰富的行为接口——[转换表](references/programming-paradigms/state-machine.md)更简单且更可审计。
 
-[Command Pattern](command.md) 封装的是请求，而不是状态；当 transition 需要把 commands 排队以便稍后执行时，它与 State 可以很好地互补。
+[命令模式](command.md)封装的是请求而非状态；它在转换将命令排队供稍后执行时补充状态模式。

@@ -1,27 +1,27 @@
 # basedpyright
 
-basedpyright 是 Pyright 的社区分支。它与 Pyright 在性能、import resolution 和 LSP 行为上保持紧密跟进，但默认更严格、diagnostic 更多、支持 baseline，并可通过 PyPI 安装。它最适合作为严格 type-check 的交叉参考，以及在 editor 与 CLI 结果保持一致时使用。
+basedpyright 是 Pyright 的一个社区分支。它在性能、导入解析和 LSP 行为上紧跟 Pyright，但提供了更严格的默认配置、额外的诊断、基线（baseline）支持以及 PyPI 安装。它在严格类型检查交叉引用以及保持编辑器和 CLI 结果一致方面最为有用。
 
 ## 与 Pyright 的关系
 
-Pyright 提供了基础：一个快速的 type checker，具备强大的 language server 支持、CLI 执行、import resolution 以及核心 typing 规则。basedpyright 是在此基础上继续跟进 upstream、并增加维护者认为缺失内容的 fork。Pyright 的能力可以作为 basedpyright 的 upstream 证据，但两者并不完全相同，因此 Pyright 文档只能说明基线，而不能说明 basedpyright 的具体行为。
+Pyright 提供了基础：一个具有强大语言服务器支持、CLI 执行、导入解析和核心类型规则的快速类型检查器。basedpyright 是一个分支，它在持续跟进上游的同时，添加了其维护者认为缺失的功能。Pyright 的能力可以作为 basedpyright 的上游证据引用，但两者并不相同，因此 Pyright 的文档仅建立基线，而非 basedpyright 的具体行为。
 
-## 默认严格度差异
+## 默认严格性差异
 
-最显著的区别是：basedpyright 默认就比 Pyright 更严格。它会把许多 Pyright 只是 warning 或默认关闭的 diagnostic 提升为 error，因此一个在 Pyright 下干净的代码库，在 basedpyright 下可能一下冒出一大批新问题。这正是这个 fork 的目的：默认就表达更高要求。
+最显著的区别在于，basedpyright 默认是严格的，而 Pyright 则不是。它将许多 Pyright 视为警告或禁用的诊断提升为错误，因此在 Pyright 下干净的代码库在 basedpyright 下可能会浮现出一波新的发现。这正是该分支的要点：它开箱即用表达了更严格的要求。
 
-## `reportUnusedX` 与额外诊断
+## reportUnusedX 与额外诊断
 
-basedpyright 增加并启用了超出 Pyright 集合的诊断，包括更严格的 `reportUnused*` 规则（未使用的 import、变量、表达式等）以及对逃逸到其他地方的 `Any` 使用的报告。这些规则能捕获死代码和静默的 `Any` 泄漏，但在大型既有代码库上，它们需要 baseline 才不会在初次运行时得到无法承受的报告量。
+basedpyright 添加并启用了超出 Pyright 范围的诊断，包括更严格的 `reportUnused*` 规则（未使用的导入、变量、表达式等），以及对逃逸其他检测的 `Any` 使用的报告。这些规则捕获死代码和静默的 `Any` 泄漏，但在大型现有代码库上，它们需要一个基线来避免不可管理的初始报告。
 
-## 基线采用
+## 基线采用（Baseline Adoption）
 
-对于已有项目，basedpyright 支持 baseline file，用来记录当前发现的问题，这样只有新问题才会让 gate 失败。这是在半路采用它的实际路径：先捕获 baseline，守住新代码，再逐步清理已记录的问题，而不是在第一次跑出绿色之前就把所有问题修完。
+对于现有项目，basedpyright 支持一个基线文件，该文件记录当前的发现，因此只有新问题会导致门禁失败。这是在其生命周期中途采用它的实用路径：捕获基线，对新代码保持标准，并随着时间的推移逐步消除记录的发现，而不是在首次绿色运行之前修复所有问题。
 
 ## IDE 集成
 
-basedpyright 提供 language server，并与编辑器集成，包括在开源 VS Code 构建之外获得类似 Pylance 的能力。因为编辑器和 CLI 用的是同一引擎，所以内联反馈和 gate 能保持一致，这也是它在严格工作流中很有吸引力的一大原因。
+basedpyright 提供语言服务器并与编辑器集成，包括在专有的 VS Code 构建之外实现类似于 Pylance 功能的路径。由于相同的引擎在编辑器和 CLI 中运行，编辑器内反馈和门禁保持对齐，这是它对于严格工作流具有很大吸引力的原因。
 
-## 何时有价值
+## 何时提供价值
 
-如果 [ty](ty.md) 作为默认 gate，basedpyright 更适合作为历史严格 profile、迁移交叉检查、棘手 inference 情况的验证器，或外部协作期间的补充。它不会取代 ty 成为默认。除非项目规模、风险和收益确实值得配置成本，否则不要永久同时开着 ty、[mypy](mypy.md) 和 basedpyright 这三道 gate。启用 basedpyright 时，应显式定义 baseline、suppression 风格、strict rules、目标 Python 版本和 import resolution，这样结果才能在不同机器和 CI 上保持可复现。
+[ty](ty.md) 是默认门禁，而 basedpyright 则作为历史严格配置、迁移交叉检查、困难推断案例的验证器，或外部协作期间的补充。它不会取代 ty 作为默认门禁。除非项目规模、风险和收益能够证明配置成本是合理的，否则避免永久性的 ty 加上 [mypy](mypy.md) 加上 basedpyright 的三重门禁。当启用 basedpyright 时，请明确定义基线、抑制风格、严格规则、目标 Python 版本和导入解析，以便结果在机器和 CI 之间可复现。

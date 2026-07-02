@@ -1,52 +1,52 @@
-# Fast Review — Code Quality
+# 快速审查（Fast Review）——代码质量
 
-默认模式。开发后的快速高信号自检，或针对小 diff 的 review。优化目标是少量、把握高的发现，而不是覆盖率。倾向于对足够好的代码不做干预。
+默认模式。开发后或对小型 diff 进行的快速、高信号自查。优化目标是少量、可信的发现项——而非覆盖率。倾向于放过足够好的代码。
 
-## 触发条件
+## 触发条件（Trigger）
 
-- 未指定模式时默认使用。
-- 日常开发自检。
-- 小 diff、单文件或聚焦的 PR。
+- 未指定模式时的默认选项。
+- 日常开发自查。
+- 小型 diff、单文件或聚焦的 PR。
 
-## 前提
+## 前置条件（Preconditions）
 
-- 只读。不要修改代码。
-- 必须有明确目标：一个 diff、一个文件，或一组已命名的文件。如果范围是整个仓库或不清楚，就请用户收窄，或者按 full review 处理。
+- 只读。不修改代码。
+- 有具体的审查目标：一个 diff、一个文件或一组指定的文件。如果范围是整个仓库或不清晰，请要求用户缩小范围，或将请求视为完整审查。
 
-## 步骤
+## 步骤（Steps）
 
-1. 确立项目事实。读最近的 `AGENTS.md`/`CLAUDE.md`，并扫一眼变更附近的代码，了解现有结构和约定。
-2. 读取偏好，如果存在：先 `.agents/preferences/code-quality.md`，否则 `.agents/preferences/code-quality/index.md`。两者都不存在则继续。
-3. 扫描 diff 或指定代码。优先使用 `git diff`、`git show`、`rg`、`nl`，而不是把全部内容都加载进来。
-4. 用以下标准检查目标：
-    - 错误的抽象——一个通用 helper、base class 或参数集合并不匹配真实 variation。
-    - 过薄的 wrapper——一个函数或类只是重命名一个表达式，没有任何语义边界。
-    - 知识重复——同一个规则、schema 或决策在两个地方重复出现（不是仅仅外观相似）。
-    - 明显的 smell——长函数混合多个阶段、全局/散落状态、primitive obsession、shotgun surgery。
-    - 模式误用——在还没有 variation point 时就套用了一个命名模式。
-    - 没有测试就重构——在缺乏测试覆盖的代码上做行为可能改变的重组。
-    - Agent 配置 smell——如果 review 的对象是 `AGENTS.md`/`SKILL.md`/prompt config：冲突、死规则、含糊指令、冗余。
-5. 输出 0-5 个 findings，按信号强度从高到低排序。0 个 findings 也是有效且良好的结果。
+1. 建立项目事实。读取最近的 `AGENTS.md`/`CLAUDE.md`，并浏览变更周围的代码以了解现有结构和约定。
+2. 读取偏好（若存在）：`.agents/preferences/code-quality.md`，否则 `.agents/preferences/code-quality/index.md`。若两者都不存在，则继续执行。
+3. 扫描 diff 或指定的代码。优先使用 `git diff`、`git show`、`rg`、`nl`，而非加载所有内容。
+4. 对照以下方面检查目标：
+   - 错误的抽象——不匹配实际变化的通用辅助函数、基类或参数集。
+   - 薄包装（thin wrappers）——重命名一个表达式但未增加语义边界的函数或类。
+   - 知识重复——两个位置出现相同的*规则、模式或决策*（不仅仅是看起来相似的代码）。
+   - 明显的坏味——混合阶段的过长函数、散布/全局状态、基本类型偏执、霰弹式修改。
+   - 模式误用——在尚不存在变化点的地方应用了命名模式。
+   - 无测试的重构——对没有测试覆盖的代码进行改变行为式的重构。
+   - Agent 配置坏味——若审查 `AGENTS.md`/`SKILL.md`/提示词配置：前后矛盾、死规则、模糊指令、冗余。
+5. 输出 0-5 条发现项，信号最高的排在最前。零条发现项是有效且良好的结果。
 
-## 输出格式
+## 输出格式（Output Format）
 
-以 findings 开头，保持简洁。每个 finding 一块：
+发现项优先，紧凑。每个发现项一个区块：
 
 ```text
-- [severity, confidence] path:line Title
-  Fact: observable evidence.
-  Impact: why it matters — change cost, readability, correctness, testability.
-  Recommendation: smallest sufficient change.
+- [严重度, 置信度] 路径:行号 标题
+  事实：可观察的证据。
+  影响：为何重要——变更成本、可读性、正确性、可测试性。
+  建议：最小充分的变更。
 ```
 
-除非真的有信号，否则省略 Open Questions 和 Notes。不要为了凑满五条而填充内容。
+跳过开放式问题和备注，除非它们携带真实信号。不要为了凑满五条而填充。
 
-## 停止规则
+## 停止规则（Stop Rules）
 
-- 不要为了满足某个原则而编造 findings。干净的 diff 可以没有 findings。
-- 不要为了 DRY 就建议抽象，除非能证明两个位置共享同一知识。
-- 不要自动重构或重组；只报告，不动手。
-- 不要自行升级到 full review——只有当 diff 明显需要更深入时才建议。
-- 最多 5 条 findings；保留最有分量的部分。
-- 跳过 formatter 或 linter 可以机械捕捉的问题。
-- 不要把偏好当成普遍工程真理。
+- 不要为了满足某个原则而制造发现项。干净的 diff 得到零条发现项。
+- 未经证明两处共享相同知识，不要为追求 DRY 而推荐抽象。
+- 不要自动重构或重组；报告，而非重写。
+- 不要升级到完整审查——仅在 diff 明显需要更深入工作时才建议。
+- 最多 5 条发现项，保留最关键的。
+- 跳过任何格式化工具或 linter 可以自动捕获的内容。
+- 不要将偏好表述为普适的工程真理。

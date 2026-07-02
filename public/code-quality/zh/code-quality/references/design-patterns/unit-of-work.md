@@ -1,47 +1,47 @@
-# Unit of Work
+# 工作单元（Unit of Work）
 
-Unit of Work 模式维护一个受业务 transaction 影响的对象列表，并协调把变更一次性写入数据库。它跟踪哪些对象是新的、被修改的或被移除的，并把所有变更一起提交 - 如果任何一步失败，就全部回滚。
+工作单元模式维护受业务事务影响的对象列表，并协调将所有变更以单一原子操作写入数据库。它追踪哪些对象是新增的、修改的或删除的，并一次性提交所有变更——如果任何步骤失败，则全部回滚。
 
-它的主要价值在于 transaction 一致性：必须一起成功或失败的多个 repository 操作，由 Unit of Work 协调，而不是各个 repository 各自独立提交。
+其主要价值在于事务一致性：必须一起成功或失败的多个仓库操作由工作单元协调，而非每个仓库独立提交。
 
 ## 结构
 
-- **Unit of Work**（接口）：声明 `commit()`、`rollback()`，并提供对 repository 的访问。
-- **具体 Unit of Work**：包装数据库 session/connection，跟踪变更，执行 commit/rollback。
-- **Repository**：通过 Unit of Work 访问；在它的 transaction scope 内运行。
-- **应用 / 服务层**：创建 Unit of Work，通过它的 repository 执行操作，然后 commit 或 rollback。
+- **工作单元（Unit of Work, 接口）**：声明 `commit()`、`rollback()`，并提供对仓库的访问。
+- **具体工作单元（Concrete Unit of Work）**：包装数据库会话/连接，追踪变更，实现提交/回滚。
+- **仓库（Repositories）**：通过工作单元访问；在其事务范围内操作。
+- **应用/服务层（Application/service layer）**：创建工作单元，通过其仓库执行操作，然后提交或回滚。
 
-## 何时适合这个模式
+## 模式适用时
 
-- 一个业务操作会触及多个必须原子持久化的聚合。
-- 应用有明确的服务层方法来编排领域逻辑。
-- transaction boundary 需要在应用层清晰可见并且可测试。
-- 多个 [repositories](repository.md) 共享同一个 session/connection，而且它们的写入必须协同。
-- 架构受益于把“发生了什么变化”和“何时持久化”分开。
+- 一个业务操作涉及必须原子化持久化的多个聚合。
+- 应用程序具有编排领域逻辑的显式服务层方法。
+- 事务边界需要在应用层可见且可测试。
+- 多个[仓库](repository.md)共享一个会话/连接，且它们的写入必须协调。
+- 架构受益于将"改变了什么"与"何时持久化"分离。
 
-## 何时不适合这个模式
+## 模式不适用时
 
-- 每次操作都只是单实体 CRUD，没有跨聚合一致性需求。ORM session 或一个简单的 `with db.transaction():` 块就足够了。
-- 框架已经以声明式方式管理 transaction（例如简单场景下 Django 的 `@transaction.atomic`）。
-- 应用偏读多写少，几乎不需要写入协调。
-- 跨多个服务的分布式 transaction - Unit of Work 只适用于单个数据库边界；跨服务一致性需要 saga 模式或 eventual consistency。
-- 显式跟踪变更的开销超过了简单应用中所带来的收益。
+- 每个操作是单实体的 CRUD，没有跨聚合的一致性需求。ORM 会话或简单的 `with db.transaction():` 块就足够了。
+- 框架已经声明式地管理事务（例如，Django 的 `@transaction.atomic` 用于简单场景）。
+- 应用程序是读密集型，写入协调很少。
+- 跨多个服务的分布式事务——工作单元适用于单个数据库边界内；跨服务一致性需要 saga 模式或最终一致性。
+- 显式跟踪变更的开销对于简单应用来说超过了其收益。
 
 ## 常见实现问题
 
-**作用域。** Unit of Work 应当只活一个业务操作。把它放在应用启动时创建并在请求之间共享，会导致陈旧数据和并发 bug。在 web 应用中，作用域应当是一次请求；在 worker 中，作用域应当是一项 job。
+**作用域。** 工作单元应精确地存活一个业务操作。在应用程序启动时创建并跨请求共享它会导致数据陈旧和并发错误。在 Web 应用中，作用域限定到请求；在 Worker 中，限定到作业。
 
-**ORM 集成。** SQLAlchemy 之类的 ORM 内部已经实现了 Unit of Work - Session 会跟踪脏对象并在 commit 时 flush。把 ORM session 再包一层显式 Unit of Work class 的意义，是让边界在应用层更清楚、可测试，而不是重复实现变更跟踪。如果 ORM 自带的 session 管理已经足够显式，那么额外再包一层可能只是在增加仪式感，却没有价值。
+**ORM 集成。** 像 SQLAlchemy 这样的 ORM 已经在内部实现了工作单元——Session 跟踪脏对象并在提交时刷新。将 ORM 会话包装在显式的工作单元类中，是为了在应用层使边界可见且可测试，而不是重新实现变更跟踪。如果 ORM 内置的会话管理已经足够明确满足你的需求，额外的包装可能只增加仪式而无价值。
 
-**嵌套 transaction。** 应避免深度嵌套的 Unit of Work。如果子操作需要独立的 commit/rollback，请显式使用 savepoint，而不是嵌套 Unit of Work。
+**嵌套事务。** 避免深度嵌套的工作单元。如果子操作需要独立的提交/回滚，请显式使用保存点（savepoint），而不是嵌套工作单元。
 
-**错误处理。** 任何异常路径都必须 rollback。[Context managers](../../../python-engineering/references/grammar/context-manager.md)（`with uow:`）是最自然的方式 - `__exit__` 在存在异常时调用 rollback。这也正是 [resource lifecycle](../programming-paradigms/resource-lifecycle.md) 模式的工作方式：把 acquire 和 release 配对。
+**错误处理。** 在任何异常路径上必须执行回滚。[上下文管理器](python-engineering/references/grammar/context-manager.md)（`with uow:`）是自然的选择——`__exit__` 在异常激活时调用回滚。这也是[资源生命周期](references/programming-paradigms/resource-lifecycle.md)模式的工作方式：将获取与释放配对。
 
-**测试。** Unit of Work 边界是天然的测试分界。使用 mock 或内存实现，可以让服务层测试在没有数据库的情况下验证编排行为。
+**测试。** 工作单元边界是测试的自然接缝。模拟或内存实现使服务层测试无需数据库即可验证编排行为。
 
 ## Python 实现形态
 
-在 Python 中，Unit of Work 自然会表现为一个 context manager：
+在 Python 中，工作单元自然采用上下文管理器的形式：
 
 ```python
 with unit_of_work() as uow:
@@ -51,8 +51,8 @@ with unit_of_work() as uow:
     uow.commit()
 ```
 
-如果在 `commit()` 之前发生异常，context manager 的 `__exit__` 会调用 `rollback()`。这让 transaction boundary 既显式又能在异常情况下保持安全。`context manager mechanism` [context manager mechanism](../../../python-engineering/references/grammar/context-manager.md) 保证即使出现意外异常也能完成 teardown。
+如果在 `commit()` 之前发生异常，上下文管理器的 `__exit__` 会调用 `rollback()`。这使得事务边界显式且异常安全。[上下文管理器机制](python-engineering/references/grammar/context-manager.md)保证了即使在意外异常情况下也能进行清理。
 
-## 与 Repository 的关系
+## 与仓库的关系
 
-[Repository](repository.md) 提供面向单个聚合的 collection-like API。Unit of Work 负责协调这些变更 _何时_ 被持久化。它们天然可以组合：Unit of Work 拥有或提供对 repository 的访问，而同一个 Unit of Work 内的所有 repository 操作共享它的 transaction scope。关于如何判断什么算一个聚合，也可以参考 [DDD aggregate boundaries](../design-principles/ddd.md)。
+[仓库](repository.md)提供单个聚合的类似集合的 API。工作单元协调这些变更*何时*被持久化。它们自然组合：工作单元拥有或提供对仓库的访问，且工作单元内的所有仓库操作共享其事务作用域。另请参阅 [DDD 聚合边界](references/design-principles/ddd.md)以决定什么构成一个聚合。

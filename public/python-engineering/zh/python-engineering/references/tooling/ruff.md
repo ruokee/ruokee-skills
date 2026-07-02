@@ -1,40 +1,40 @@
 # Ruff
 
-Ruff 是一个快速的 Rust-based formatter 和 linter，把 Black、Flake8、isort、pyupgrade 以及许多 Flake8 plugin 的工作整合到一个工具里。它承担两项职责：`ruff format` 负责机械性的布局，`ruff check` 负责 lint 规则。将二者放在同一工具链中，意味着共享配置和一致、快速的反馈。
+Ruff 是一个基于 Rust 的快速格式化器和代码检查器，它在一个工具中覆盖了 Black、Flake8、isort、pyupgrade 以及许多 Flake8 插件的工作。两个职责存在于同一个二进制文件中：`ruff format` 处理机械布局，`ruff check` 处理 lint 规则。将它们放在同一个工具链中意味着共享配置和一致、快速的反馈。
 
-## Formatter
+## 格式化器（Formatter）
 
-`ruff format` 负责重排布局：换行、缩进、引号、括号、空行和尾随逗号。它以 Black 兼容为目标，因此输出风格与 Black 很接近，在 Black 代码库上采用它通常只会带来很小的变更量。机械性的东西应完全交给它，并停止人工 review 格式。它是确定性的，适合在每次保存时以及 pre-commit 中运行。
+`ruff format` 重新格式化布局：换行、缩进、引号、括号、空行和尾随逗号。它追求与 Black 兼容，因此输出接近 Black，在 Black 代码库上采用它产生的变动最小。信任它处理所有机械性格式化工作，停止手动审查格式。它是确定性的，可以在每次保存和 pre-commit 中安全运行。
 
 ```bash
 ruff format
-ruff format --check    # CI: fail if not formatted
+ruff format --check    # CI：未格式化则失败
 ```
 
-默认风格保持 Black 兼容。preview style 会启用正在进行中的格式化变化；除非项目接受随着 style 演进而定期产生重新格式化 diff，否则应保持关闭。配置写在 `[tool.ruff.format]` 下，例如 `docstring-code-format` 可用于格式化 docstring 中的代码块，这一功能是可选的，默认未开启。
+默认风格保持与 Black 兼容。预览风格（preview style）启用进行中的格式化变更；如果项目不接受随着风格演变而周期性出现的重新格式化差异，请关闭它。在 `[tool.ruff.format]` 下进行配置，例如 `docstring-code-format` 用于格式化文档字符串中的代码块，这是可选的，默认不开启。
 
-## Linter
+## 代码检查器（Linter）
 
-`ruff check` 会运行按前缀分组的 lint rule family：`E` / `W`（pycodestyle）、`F`（Pyflakes）、`I`（isort 导入排序）、`UP`（pyupgrade 现代化）、`B`（bugbear）、`SIM`（simplify）、`C4`（comprehensions）、`RET`（return）、`RUF`（Ruff 原生），以及更多。像 `E`、`F`、`I`、`UP`、`B` 这样的小型起始集合，就能捕获真实缺陷，同时不会把项目淹没在风格噪音里。
+`ruff check` 运行按家族组织的 lint 规则，由前缀标识：`E`/`W`（pycodestyle）、`F`（Pyflakes）、`I`（isort 导入排序）、`UP`（pyupgrade 现代化）、`B`（bugbear）、`SIM`（简化）、`C4`（推导式）、`RET`（返回）、`RUF`（Ruff 原生）以及更多。一个较小的起始集合，例如 `E`、`F`、`I`、`UP`、`B`，能够捕获真实的缺陷，而不会让项目淹没在风格噪音中。
 
 ```bash
 ruff check
 ruff check --fix
 ```
 
-导入排序来自 `I` family，因此不需要单独的 isort。不要使用 `select = ["ALL"]`：那会把 lint 变成 micro-preference 的集合，而每增加一个 family 都会带来误报成本、review 认知成本、自动修复安全风险以及旧代码的迁移成本。应随着需要逐步加入 `SIM`、`RUF`、`C4`、`PIE`、`RET` 等 family。
+导入排序来自 `I` 家族，因此不需要单独的 isort。避免使用 `select = ["ALL"]`：它会将代码检查变成一组微观偏好，而且每个添加的家族都带有误报成本、审查认知成本、自动修复安全风险以及对现有代码的迁移成本。按需添加诸如 `SIM`、`RUF`、`C4`、`PIE`、`RET` 等家族。
 
-## 规则成熟度
+## 规则成熟度（Rule Maturity）
 
-规则分为 stable 和 preview。stable 规则通过 `select` 启用；preview 规则则需要 preview mode，而且可能发生变化。应把 preview 规则视作可选实验，而不是默认项，这样规则集就不会在 Ruff 升级时自行漂移。
+规则分为稳定版和预览版。稳定规则通过 `select` 启用；预览规则需要预览模式，并且可能会发生变化。将预览规则视为可选的实验性功能，而不是默认规则，这样规则集不会在 Ruff 升级时悄然发生变化。
 
-## `ruff check --fix` 的行为
+## `ruff check --fix` 行为
 
-`--fix` 会应用 Ruff 认为安全的修复，例如删除未使用的 import 和整理 import 顺序。unsafe fixes 可能改变行为或意图，需要通过 `--unsafe-fixes` 才会启用。应审查自动修复 diff，而不是盲目提交，尤其是在对遗留代码库进行批量修复时，因为在特殊代码上，所谓“安全”的修复也可能带来惊喜。
+`--fix` 应用 Ruff 归类为安全的修复，例如移除未使用的导入并对其进行排序。不安全的修复可能会改变行为或意图，需要 `--unsafe-fixes` 来选择加入。审查自动修复的差异，而不是盲目提交，尤其是在遗留代码库中进行批量操作时，因为针对异常代码的"安全"修复仍然可能带来意外。
 
-## 配置
+## 配置（Configuration）
 
-配置写在 `pyproject.toml` 的 `[tool.ruff]` 下，规则选择在 `[tool.ruff.lint]`，格式化配置在 `[tool.ruff.format]`。`target-version` 和 `line-length` 只需设一次，formatter 和 linter 两边共享即可。per-file ignore 可处理合理的例外，例如放宽 `__init__.py` 中的 import 规则。
+配置位于 `pyproject.toml` 的 `[tool.ruff]` 下，`[tool.ruff.lint]` 用于规则选择，`[tool.ruff.format]` 用于格式化。设置 `target-version` 和 `line-length` 一次，让两部分共享它们。按文件忽略（per-file ignores）处理合法的例外情况，例如在 `__init__.py` 中放宽导入规则。
 
 ```toml
 [tool.ruff]
@@ -45,6 +45,6 @@ line-length = 88
 select = ["E", "F", "I", "UP", "B"]
 ```
 
-## Ruff 负责什么，哪些需要人工 review
+## Ruff 处理的内容与需要人工审查的内容
 
-Ruff 负责格式化和大范围机械 lint，这正是那些不该进入人工 review 的噪音。它不会判断命名质量、模块职责、异常上下文、类型边界设计、docstring 的信息价值或架构；这些需要 type checker、测试和人工 review。Ruff 的安全规则（`S`，来自 Bandit）只是低成本的静态提醒，不是完整的 SAST 或 dependency-vulnerability 扫描，也不能替代专门工具或人工安全 review。
+Ruff 解决格式化和广泛的机械性 lint 问题，这正是不应到达人工审查者的噪音。它不评判命名质量、模块职责、异常上下文、类型边界设计、文档字符串信息价值或架构；这些需要类型检查器、测试和人工审查。Ruff 的安全规则（`S`，来自 Bandit）是低成本的静态提醒，而不是完整的 SAST 或依赖漏洞扫描，也不能替代专用工具或人工安全审查。

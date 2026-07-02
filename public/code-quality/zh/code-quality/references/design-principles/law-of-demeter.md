@@ -1,63 +1,82 @@
-# Law of Demeter
+# 迪米特法则（Law of Demeter）
 
-Law of Demeter（LoD），也叫最少知识原则，说的是一个单元应该只和它的直接朋友交谈，避免穿过一个对象去操作它返回的对象。一个 method 应该只和以下对象交互：它自己的对象、作为参数传入的对象、它自己创建的对象，以及它的直接组件。它不应该沿着一长串中间对象导航，去接触一个远处的目标。
+迪米特法则（LoD），也称为最少知识原则（Principle of Least Knowledge），指出一个单元
+应该只与其直接的朋友交谈，避免通过一个对象深入到它所返回的对象上进行操作。
+一个方法应当只与以下对象交互：自身、作为参数传入的对象、它创建的对象以及它的直接组件。
+它不应导航一长串中间对象来获取一个遥远的目标。
 
-重点不是表达式里有多少个点。重点是调用方被迫知道了多少自己并不拥有的对象内部结构。当调用方一路写着 `a.b.c.d` 时，它硬编码了三层结构知识，而这层结构的任何变化都会扩散到所有走过同一路径的 caller。
+重点不在于表达式中点的数量。重点在于调用者被迫了解多少关于它不拥有的对象的内部结构。
+当调用者遍历 `a.b.c.d` 时，它已将三层结构的知识硬编码在其中，对该结构的任何更改
+都会波及到每个走过相同路径的调用者。
 
-## 它解决什么问题
+## 它解决了什么问题
 
-结构耦合。代码穿透对象时，不只是依赖了直接 collaborator，还依赖了该 collaborator 暴露出来的整张形状图。图中深处的一处变化——字段重命名、插入中间对象、类型改变——都会传播到远处、看起来无关的调用点。这就是 shotgun surgery 的经典症状：一个小小的结构变更迫使很多地方修改。
+结构耦合。当代码穿透对象时，它不仅依赖于其直接协作者，还依赖于该协作者暴露的一切的形状。
+图中深层的变更——重命名字段、插入中间对象、改变类型——会传播到遥远、看似不相关的调用点。
+这是霰弹式修改（shotgun surgery）的典型症状：一个小的结构变更迫使在多处进行编辑。
 
-LoD 会推动你给直接 collaborator 提供一个表达“你想要什么”的 method，于是 collaborator（真正拥有结构的一方）自己决定“怎么拿到它”。结构知识留在结构所在的地方。
+LoD 推动你给你的直接协作者一个表达*你想要什么*的方法，这样协作者（拥有该结构）来决定
+*如何*获取它。结构的知识停留在结构所在的地方。
 
-## 火车事故式调用链
+## 火车残骸（Train wreck）
 
-“train wreck” 是一串连在一起的 accessor 链，看起来像车厢一节接一节：
+"火车残骸"是一长串像连接的车厢一样串在一起的访问器链：
 
 ```python
-zip_code = order.customer.address.zip_code        # train wreck
-tax_rule = order.customer.account.region.tax_rule # train wreck
+zip_code = order.customer.address.zip_code        # 火车残骸
+tax_rule = order.customer.account.region.tax_rule # 火车残骸
 ```
 
-这段代码现在知道：order 有 customer，customer 有 address，address 有 zip code。若以后 `Address` 被拆开，或者 `Customer` 多了一层间接，所有这类链都会断。修复方式是用领域术语向最近的对象提问：
+调用代码现在知道订单有一个客户，客户有一个地址，地址有邮政编码。如果 `Address` 后来被拆分，
+或 `Customer` 增加了一层间接层，每个这样的链都会断裂。修复方法是问最近的对象用领域术语回答：
 
 ```python
 zip_code = order.shipping_zip_code()
 needs_review = order.requires_tax_review()
 ```
 
-现在是 order 自己负责遍历。调用方表达意图；结构被隐藏起来。这与 [Tell, Don't Ask](./tell-dont-ask.md) 直接相关：与其跨好几跳把数据取出来再在外部做决定，不如让数据所有者提供一个回答问题的 method。
+现在订单拥有遍历。调用者表达意图；结构保持隐藏。这直接连接到[告诉，不要问](./tell-dont-ask.md)：
+你不是跨越几跳拉取数据以在外部做决策，而是给数据拥有者一个回答该问题的方法。
 
-## 什么时候它重要
+## 何时重要
 
-- 领域对象上，链式访问会驱动业务规则
-  （例如 `order.customer.address.zip_code` 决定税务行为）。
-- 调用方穿过 repository、client 或 response object，深入其内部结构，从而与内部布局耦合。
-- 测试需要 monkeypatch 到对象图深处——深 mock 往往意味着被测代码对远处结构知道得太多。
+- 领域对象，其链式访问驱动业务规则（`order.customer.address.zip_code` 决定税务行为）。
+- 调用者穿透仓库、客户端或响应对象进入其内部结构，将自身耦合到该内部布局。
+- 测试深度修补对象图——深层 mock 是代码测试部分知道太多关于遥远结构的坏味道。
 
-在这些情形里，结构变化的 blast radius 很大，LoD 就是用来帮助你找到该在哪里加 semantic method 的好视角。
+在这些情况下，结构性变更的波及范围很广，LoD 是寻找何处添加语义方法的有用视角。
 
-## 什么时候它过于严格
+## 何时过于严格
 
-如果把 LoD 机械地理解为“数点，然后禁止”，它就会变成噪音。
+当机械地应用为"数点数，然后禁止它们"时，LoD 就变成了噪音。
 
-- **Fluent interfaces 和 builders。** `query.filter(...).order_by(...).limit(10)` 是设计出来的链式调用。每次调用返回的仍是同一个概念对象，而不是更深一层的内部对象。
-- **Data traversal libraries.** Pandas、SQLAlchemy queries 和 `pathlib.Path` 的链式写法是惯用法。`path.parent.parent / "config.toml"` 不是耦合问题。
-- **透明的数据载体。** 从 DTO 或 JSON-like 结构里直接读 `response.json()["items"][0]["id"]`，只是普通数据访问，不是对行为性对象内部结构的结构耦合。纯粹作为数据承载的 dataclass 可以直接遍历。
+- **流式接口（Fluent interfaces）和构建器（Builders）。** `query.filter(...).order_by(...).limit(10)`
+  是一个设计的链。每次调用返回同一个概念对象，而不是更深层次的内部对象。
+- **数据处理库。** Pandas、SQLAlchemy 查询和 `pathlib.Path` 链式调用是习惯用法。
+  `path.parent.parent / "config.toml"` 不是耦合问题。
+- **透明数据载体。** 从 DTO 或 JSON 类似结构中读取 `response.json()["items"][0]["id"]` 是纯数据访问，
+  不是对行为的结构耦合。纯粹用作数据持有者的 dataclass 可以直接遍历。
 
-判断标准始终是：_调用方是否因此知道了某种内部结构，而这个结构一变它就会坏？_ 如果链路经过的是稳定 interface 或透明数据，那就没有违规。如果链路编码的是拥有行为和 invariants 的对象的私有布局，那 LoD 就派上用场了。
+区分标准始终是：*调用者现在是否知道了某些内部结构——如果改变，会破坏它？* 如果链是在稳定的接口
+或透明数据上，就没有违规。如果链编码了拥有行为和不变量的对象的私有布局，那就是 LoD 发挥作用的地方。
 
-## 以错误方式强行遵守
+## 以错误的方式强制
 
-强行修这个问题有时比问题本身更糟。把每条链都包成一个 forwarding method，只会制造一堆无意义的 pass-through method（例如 `def zip_code(self): return self._address.zip_code`），它们既没有语义，只是把耦合往上一层搬。这就是 shallow wrapper——见 [deep modules](./deep-modules.md) 的讨论。只有当某个 method 真正表达了有意义的领域问题时，才引入它，而不是仅仅为了去掉一个点。
+治疗可能比疾病更糟糕。将每个链都包装在转发方法中会产生一堆琐碎的透传方法
+（`def zip_code(self): return self._address.zip_code`），这些方法不增加语义，只是将
+耦合移近一层。这是一个浅包装器——参见[深模块讨论](./deep-modules.md)。只有当方法表达有意义的
+领域问题时才引入它，而不仅仅是为了去掉一个点。
 
 ## 在 Python 中
 
-- 看结构知识和变更传播，而不是只看点号数量。
-- 给 domain object 提供语义化查询：`order.shipping_postal_code()`、`invoice.is_overdue()`，而不是暴露嵌套字段让 caller 去一层层走。
-- 让 DTO、dataclass 和 JSON-like 数据保持可透明遍历。
-- 把测试中的 deep mock 当作信号：如果测试必须 patch `a.b.c.d`，生产代码大概率对那条路径知道得太多。
+- 根据结构知识和变更传播来判断，而不是点的数量。
+- 给领域对象语义查询：`order.shipping_postal_code()`、`invoice.is_overdue()`，
+  而不是暴露嵌套字段供调用者遍历。
+- 让 DTO、dataclass 和 JSON 类似的数据被透明地遍历。
+- 将测试中的深层 mock 视为信号：如果测试必须 patch `a.b.c.d`，生产代码可能对该路径知道得太多。
 
 ## 相关原则
 
-LoD 与 [information hiding](./deep-modules.md) 天然相配：二者都减少外部世界对内部结构的依赖，也都限制变更传播的距离。它还与 [Tell, Don't Ask](./tell-dont-ask.md) 以及 GRASP 的 [Information Expert](./grasp.md) 启发式重叠——三者都推动行为向持有所需数据的对象靠拢。
+LoD 与[信息隐藏](./deep-modules.md)自然搭配：两者都减少外部世界对内部结构的依赖程度，
+并且都限制变更可以传播多远。它也与[告诉，不要问](./tell-dont-ask.md)和 GRASP 的
+[信息专家](./grasp.md)启发法重叠——这三个都将行为推向持有其所需数据的对象。

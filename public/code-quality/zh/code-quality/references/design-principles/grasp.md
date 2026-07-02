@@ -1,31 +1,31 @@
-# GRASP — General Responsibility Assignment Software Patterns
+# GRASP — 通用职责分配软件模式（General Responsibility Assignment Software Patterns）
 
 ## 它是什么
 
-GRASP 是九条启发式的词汇，用来回答最常见的设计问题：_责任应该放在哪里？_ 这个行为该由谁来做，这个对象该谁创建，这个 use case 由谁协调，我们要把规则放在哪里才能让变更被局部化。与 GoF 模式不同，GRASP 模式不是你要搭建的结构，而是分配责任时的推理工具。它们与 SOLID（见 [solid.md](./solid.md)）以及 [tell-dont-ask.md](./tell-dont-ask.md) 很自然地配合。
+GRASP 是一组九个启发法，用来回答最常见的设计问题：*这个职责应该放在哪里？* 这个行为属于哪里，哪个对象应该创建那个对象，谁来协调一个用例，我们把规则放在哪里才能使变更保持局限。与 GoF 模式不同，GRASP 模式不是你要构建的结构——它们是用于良好分配职责的推理工具。它们与 SOLID（参见 [solid.md](./solid.md)）和 [tell-dont-ask.md](./tell-dont-ask.md) 自然搭配。
 
-最常见的误用，是把 GRASP 当成 UML 驱动的流程，或者把 “Controller” 理解成“web controller”，然后把业务逻辑堆进 request handler 里。用得好时，GRASP 只是一个更精确的责任放置语言。
+主要的误用是将 GRASP 视为 UML 驱动的流程，或者将"控制器（Controller）"读作"Web 控制器"，然后将业务逻辑塞进请求处理器。使用得当的话，GRASP 只是一种精确讨论职责放置的方式。
 
 ## 九个模式
 
-**Information Expert.** 将责任分配给掌握完成这项责任所需信息的 class 或 module。行为应当倾向于它所操作的数据。这是 [tell-dont-ask.md](./tell-dont-ask.md) 的发动机，也是修复 “feature envy” smell 的解药——即某个 function 伸得太深去读别的对象的字段来做决定。
+**信息专家（Information Expert）。** 将职责分配给拥有完成该职责所需信息的类或模块。行为倾向于靠近它所操作的数据。这是 [tell-dont-ask.md](./tell-dont-ask.md) 背后的驱动力，也是"特征嫉妒（feature envy）"坏味道的解毒剂——当函数深入另一个对象的字段来做决策时。
 
-**Creator.** 将创建对象 B 的责任分配给聚合、包含、紧密使用 B，或持有 B 初始化所需数据的 class A。把构造放在已有构造知识的地方，可以减少耦合。当创建逻辑复杂到开始变化时，这就是 Factory 变得合理的地方。
+**创建者（Creator）。** 将创建对象 B 的职责分配给类 A——如果 A 聚合、包含、紧密使用 B，或拥有 B 的初始化数据。它将构造放在构造所需知识已存在的地方，降低了耦合。当创建逻辑复杂到足以变化时，这就是工厂模式（Factory）变得合理的地方。
 
-**Controller.** 将处理一个系统操作（一个 use case）的责任分配给一个协调对象，这个对象既不是 UI，也不是 domain logic 本身。controller 的工作只是薄协调——接收请求、委托给 domain、返回结果。在 Python 里，CLI command handler 或 API view 应当是这样的 thin controller，而业务规则应留在 core module 中。
+**控制器（Controller）。** 将处理系统操作（用例）的职责分配给协调对象——该对象*不是* UI，也*不是*领域逻辑本身。控制器的工作是薄协调——接收请求、委派给领域、返回结果。在 Python 中，CLI 命令处理器或 API 视图应该是这种薄控制器，业务规则位于核心模块中。
 
-**Low Coupling.** 让模块之间的依赖尽量少。耦合越低，一个地方的变更传播到其他地方就越少，单元也越容易单独测试和复用。它是需要权衡的力量，不是绝对目标——必要的耦合仍然存在。
+**低耦合（Low Coupling）。** 分配职责以使模块之间的依赖保持较低。更低的耦合意味着一个地方的变更传播到更少的地方，单元更容易在隔离状态下测试和复用。这是一个需要平衡的力量，而不是绝对目标——一定程度的耦合是必要的。
 
-**High Cohesion.** 让每个 module 的内容彼此高度相关、聚焦明确。高内聚是 [solid.md](./solid.md) 中 SRP 的正向表达——它让 module 更容易理解，并拥有单一清晰的变更原因。低耦合和高内聚应当一起看；只优化其中一个而忽略另一个，设计就会变差。
+**高内聚（High Cohesion）。** 分配职责以使每个模块的内容强相关且专注。高内聚是 [solid.md](./solid.md) 中 SRP 的正面形式——它保持模块的可理解性，并给它一个单一的明确变更原因。低耦合和高内聚一起评估；优化其中一个而忽略另一个会产生糟糕的设计。
 
-**Polymorphism.** 当行为按 type 变化时，应用 polymorphism（在 Python 中可以是 duck typing、基于 `Protocol` 的 dispatch、dispatch map，或 `functools.singledispatch`），而不是到处写 `if/elif` 类型检查。这样每个变体都被局部化，新增一个变体变成“加一个”而不是“改很多”——这就是 OCP 背后的机制。
+**多态（Polymorphism）。** 当行为根据类型变化时，使用多态（在 Python 中：鸭子类型、基于 `Protocol` 的分发、分发映射或 `functools.singledispatch`）来分配变化的行为，而不是散布的 `if/elif` 类型检查。这使每个变体本地化，并使添加新变体成为添加而不是编辑——这是 OCP 背后的机制。
 
-**Pure Fabrication.** 当没有任何 domain concept 适合承载某个责任时，就人为创造一个非领域对象来承载它——service、mapper、adapter、repository 或 policy function。这样可以保持 domain object 的内聚性，避免为了迎合 Information Expert 而把 infrastructure 关注点硬塞进去。Pure Fabrication 合理且常见；需要注意的是不要把它们当作无所不装的垃圾场。
+**纯虚构（Pure Fabrication）。** 当没有领域概念是某项职责的合适归宿时，发明一个非领域对象来持有它——服务、映射器、适配器、仓库或策略函数。这保持了领域对象的内聚性，并防止你纯粹为了满足信息专家而用基础设施关注点污染它们。纯虚构是合理的且常见的；注意事项是不要过度使用它们作为垃圾场。
 
-**Indirection.** 将责任分配给一个中间对象或函数，以解耦两个原本会直接耦合的单元（例如 core 和第三方 client 之间的 adapter）。Indirection 是 Low Coupling 的工具，但每多一层，就多一个追踪跳点——只有在耦合问题真实存在时才加，而不要条件反射地加。
+**间接层（Indirection）。** 将职责分配给中间对象或函数，以解耦本来会直接耦合的两个单元（例如，在你的核心和第三方客户端之间的适配器）。间接层是低耦合的工具，但每一层都增加了一个追溯的跳跃——为了真正的耦合问题而添加，而不是出于反射。
 
-**Protected Variations.** 将预期的不稳定点包在一个稳定 interface 后面，使一侧的 variation 不会传递到另一侧。这是 OCP、DIP、Indirection 和 Polymorphism 的统一思想。关键字是 _predicted_——只保护那些真实、已识别的 variation，而不是任何“也许哪天会变”的点，否则就会滑向 [yagni.md](./yagni.md) 所警惕的 speculative generality。
+**保护变化（Protected Variations）。** 将预测的不稳定点包装在稳定接口后面，使一侧的变化不会波及另一侧。这是 OCP、DIP、间接层和多态背后的统一思想。关键词是*预测的*——保护那些真实且已识别出的变化，而不是每个*可能*某天会变化的地方，否则你会陷入 [yagni.md](./yagni.md) 所警告的投机性通用化。
 
 ## 在 Python 中
 
-行为应尽量靠近拥有数据的地方（Information Expert）。CLI 和 API handler 保持为 thin Controller，规则放在 core。service、adapter、mapper 和 policy function 都属于合理的 Pure Fabrication。一旦 variation point 真实识别出来，就可以用 `Protocol`、adapter 或 deep module 来实现 Protected Variations（见 [deep-modules.md](./deep-modules.md)）。始终在 Low Coupling 与 High Cohesion 之间取得平衡，而不是单独最大化其中任何一个。
+行为靠近拥有它的数据（信息专家）。CLI 和 API 处理器保持为薄控制器，规则放在核心中。服务、适配器、映射器和策略函数都是合理的纯虚构。一旦真正识别出变化点，保护变化通过 `Protocol`、适配器或深模块（参见 [deep-modules.md](./deep-modules.md)）来实现。在整个过程中，平衡低耦合与高内聚，而不是单独最大化其中任何一个。

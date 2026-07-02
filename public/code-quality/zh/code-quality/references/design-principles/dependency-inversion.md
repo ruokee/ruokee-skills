@@ -1,51 +1,73 @@
-# Dependency Inversion and Dependency Injection
+# 依赖反转与依赖注入（Dependency Inversion and Dependency Injection）
 
-这两个概念相关但不同，经常被混淆：
+两个相关但不同的概念，经常被混淆：
 
-- **Dependency Inversion Principle（DIP）：** 高层 policy 不应依赖低层 detail；二者都应依赖 abstraction。这个 abstraction 由高层代码需要什么来定义，而不是由低层代码碰巧提供什么来定义。
-- **Dependency Injection（DI）：** 一种技术，让对象或函数从外部接收它的 dependencies，而不是自己构造或查找它们。DI 是实现 DIP 的一种方式，也是提升可测试性和边界隔离的主要杠杆。
+- **依赖反转原则（DIP）：** 高层策略不应依赖于低层细节；两者都应依赖于抽象。抽象由高层代码
+  所需的内容定义，而不是由低层代码碰巧提供的内容定义。
+- **依赖注入（DI）：** 一种技术，对象或函数从外部接收其依赖，而不是自己构造或查找。
+  DI 是实现 DIP 的一种方式，也是可测试性和边界隔离的主要杠杆。
 
-DIP 是设计目标；DI 是机制。你可以不靠复杂框架就遵循 DIP，也可以在完全没有 “DI container” 的情况下使用 DI。
+DIP 是设计目标；DI 是一种机制。你可以在没有复杂框架的情况下遵循 DIP，也可以在没有"DI 容器"
+的情况下使用 DI。
 
-## 高层模块依赖 abstraction
+## 高层模块依赖于抽象
 
-DIP 要解决的问题是：业务规则如果直接调用数据库 driver、HTTP client、系统时钟或 `random`，就被这些细节焊死了。policy 就不能在不拖着 infrastructure 的情况下被阅读、测试或复用，而且低层 detail 的变化会向上扩散到高层规则。
+DIP 解决的问题：直接调用数据库驱动、HTTP 客户端、系统时钟或 `random` 的业务规则被焊接在
+这些细节上。策略不再能被独立阅读、测试或复用而不拖带基础设施，并且低层细节的变化会波及到
+高层规则。
 
-反转依赖意味着高层代码把自己的需求表述为一个 abstraction——“我需要一个能告诉我当前时间的东西”、“我需要一个能保存 order 的地方”——而具体实现去满足这个需求。关键是，这个 abstraction 属于高层一侧。它由 policy 的需求塑造，而不是由低层 library 的完整 surface 决定。这和 [Interface Segregation](./solid.md) 的直觉一致：把 seam 保持得窄一些。
+反转依赖意味着高层代码将其需求表述为抽象——"我需要一个能告诉我当前时间的东西"、"我需要一个
+能保存订单的地方"——具体实现符合该需求。关键的一点是：抽象属于高层一侧。它由策略需要什么
+来塑造，而不是由低层库的完整表面来塑造。这与[接口隔离](./solid.md)是同样的直觉：保持
+接缝（seam）狭窄。
 
-## Python 的做法
+## Python 的实践方式
 
-Python 很少需要其他生态里因 DIP 而发展出来的那套重型装置。轻量工具通常就够了：
+Python 很少需要 DIP 在其他生态中获得的那种重型装置。轻量级工具通常就足够了：
 
-- **Constructor 和 function 参数。** 把 collaborator 传进去。`def process(orders, repository, clock):` 不用任何仪式就反转了三个依赖。
-- **`typing.Protocol`.** 结构化地定义 policy 所需的窄能力；只要对象有正确的方法就算满足，不必继承任何东西。见 [composition-over-inheritance](./composition-over-inheritance.md)。
-- **普通 callable。** 当 dependency 是“我调用一下就能拿到值的东西”——比如 clock、ID generator、notifier——函数或 `Callable` 比 interface object 更轻。
-- **为常见情况提供默认参数。** `def fetch(url, client=httpx.get):` 让真实默认值保持方便，同时也为测试留出传 fake 的 seam。
+- **构造函数和函数参数。** 传入协作者。`def process(orders, repository, clock):` 无需仪式
+  即可反转三个依赖。
+- **`typing.Protocol`。** 结构化地定义策略需要的窄能力；任何具有正确方法的对象都符合条件，
+  无需继承任何东西。参见 [composition-over-inheritance](./composition-over-inheritance.md)。
+- **普通可调用对象。** 当依赖是"我调用来获取值的东西"——时钟、ID 生成器、通知器——时，
+  函数或 `Callable` 是比接口对象更轻量的抽象。
+- **常见情况的默认参数。** `def fetch(url, client=httpx.get):` 保持了实际默认值的方便，
+  同时为测试传递 fake 留有接缝。
 
-把具体 wiring 统一放在一个地方——`main()`、web app 的 startup、framework entry point。这个 _composition root_ 是高层 policy 与具体 detail 会合的地方；其他地方都依赖 abstraction。
+在同一个地方装配具体接线——`main()`、Web 应用的启动代码、框架入口点。这个*组合根*
+（composition root）是高层策略遇到具体细节的地方；其他所有地方都依赖于抽象。
 
-## 什么时候 DI container 值得用，什么时候是过度设计
+## 何时 DI 容器是合理的 vs 过度杀伤
 
-DI container（一个根据配置或注解构建并装配 object graph 的 framework）解决的是大多数 Python 项目并不拥有的问题。Constructor injection 加一个小的 composition root 就能支撑很长时间。只有在 object graph 真正庞大且动态时，container 才物有所值——很多可互换实现、复杂的 lifecycle 和 scoping 需求、跨很多 module 的配置驱动 wiring。
+DI 容器（一个从配置或注解构建和装配对象图的框架）解决的是大多数 Python 项目不存在的问题。
+构造函数注入和小型组合根可以扩展很远。容器只有在对象图真正庞大且动态时才值得其成本——
+许多可互换的实现、复杂的生命周期和范围要求、跨多个模块的配置驱动装配。
 
-对典型应用来说，显式 composition root 比 container 更容易阅读、调试和追踪。全局的 _service locator_（代码向里伸手去取 dependency 的 registry）比这两者都差：它把自己满足的 dependencies 隐藏起来，把 DI 的显式性重新变回隐式的全局耦合。应当优先传入 dependencies。
+对于典型应用，显式的组合根比容器更容易阅读、调试和追踪。全局*服务定位器*
+（service locator）（代码深入其中获取依赖的注册表）比两者都差：它隐藏了它满足的依赖，
+将 DI 的显式性变回隐式的全局耦合。优先选择传入依赖。
 
-## 测试收益
+## 测试的好处
 
-DI 是让代码可测试的最干净路径。当一个函数把 clock、repository 和 HTTP client 作为参数时，测试可以直接传入 fake 或 stub——不需要 monkeypatch module 内部，也不需要去 patch 很深的 implementation。这样测试就与边界（abstraction）保持耦合，而不是与实现耦合，因此内部重构不会破坏测试。过度 mock 和过深的 `patch` 目标，通常说明 dependencies 原本就没有被注入；修好 seam，就修好了测试 smell。另见 [tdd](./tdd.md)。
+DI 是通向可测试代码的最清晰路径。当函数将其时钟、仓库和 HTTP 客户端作为参数时，测试直接传入
+fake 或 stub——不需要 monkeypatch 模块内部内容，也不需要在实现深处打补丁。这使得测试耦合到
+边界（抽象）而非实现，因此重构内部实现不会破坏测试。过度 mock 和深层 `patch` 目标通常是依赖
+*未被注入*的症状；修复接缝就修复了测试坏味道。另见 [tdd](./tdd.md)。
 
-## 什么时候不要反转
+## 何时不要反转
 
-把每个 dependency 都反转本身也是一种过度设计。不要反转这些东西：
+反转每个依赖本身就是一种过度工程化。不要反转：
 
-- **稳定的标准库依赖和 pure function。** 调用 `json.dumps` 或一个 pure helper 的代码，不需要把它包进 Protocol 里；这里没有可变实现，也没有需要伪造的东西。
-- **永远不会变化、也不需要 test double 的东西。** 一个只有单一实现且没有测试 seam 的 abstraction，是 speculative 的（[YAGNI](./yagni.md)）。
+- **稳定的标准库依赖和纯函数。** 调用 `json.dumps` 或纯辅助函数的代码不需要隐藏在 Protocol 之后；
+  没有变化的实现，也没有需要 fake 的东西。
+- **从不变化且不需要测试替身的东西。** 只有一个实现且没有测试接缝的抽象是投机性的
+  （[YAGNI](./yagni.md)）。
 
-应当反转不稳定、带副作用或可替换的边界——外部系统、时间、随机数、文件系统、网络。稳定的 core 保持直接即可。
+反转不稳定的、不纯的或可替换的边界——外部系统、时间、随机性、文件系统、网络。让稳定的核心保持直接。
 
 ## 在 Python 中
 
-- 优先使用 constructor parameters、function parameters、default arguments、small Protocols 和 factory functions。
-- 在单一 composition root 中装配具体 dependencies。
-- 用 adapter 包装外部 client；让 core 依赖 Protocol 或 callable。
-- 使用 context manager 管理 dependency lifecycle（连接、文件、锁），并把它们放在 domain logic 之外。
+- 优先选择构造函数参数、函数参数、默认参数、小型 Protocol 和工厂函数。
+- 在单一组合根中装配具体依赖。
+- 将外部客户端包装在适配器中；让核心依赖于 Protocol 或可调用对象。
+- 使用上下文管理器管理依赖生命周期（连接、文件、锁），将其保持在领域逻辑之外。

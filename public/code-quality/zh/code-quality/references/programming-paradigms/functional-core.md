@@ -1,98 +1,98 @@
-# Functional Core, Imperative Shell
+# 函数式核心，命令式外壳（Functional Core, Imperative Shell）
 
-## 它是什么
+## 什么是函数式核心，命令式外壳
 
-Functional Core, Imperative Shell 是 Gary Bernhardt 推广的一种架构。它把程序分成两层，且两层遵循不同规则。_core_ 保存纯粹的 decision logic：给定输入 data，它计算输出 data，并且不产生任何副作用——没有 I/O、没有时钟读取、没有随机性、没有网络、没有 database、没有全局 mutation。_shell_ 则是与外部世界对话的薄薄 imperative 层：它读取输入，调用 core 决定应该发生什么，然后执行 core 要求的那些副作用。
+函数式核心、命令式外壳（Functional Core, Imperative Shell）是一种由 Gary Bernhardt 推广的架构。它将程序分为两个具有不同规则的层。*核心*包含纯决策逻辑：给定输入数据，计算输出数据，不产生任何副作用——没有 I/O、没有时钟读取、没有随机性、没有网络、没有数据库、没有全局变更。*外壳*是与外部世界通信的薄命令式层：它读取输入，调用核心来决定应该发生什么，然后执行核心请求的副作用。
 
-其中的洞见是，让代码变得难以测试、难以推理的，几乎从来不是算术或分支本身，而是对环境的依赖。一个决定订单能否发货的 function 很容易测试；一个既决定又去扣卡、写行、发邮件的 function 就不容易了。把环境推到边缘，真正有趣的 logic 就会变得 pure、total，而且可以极其简单地测试。
+其洞察是：使代码难以测试和推理的几乎从来不是算术或分支——而是对环境的依赖。一个决定订单*是否*可以发货的函数很容易测试；一个决定并同时扣款、写数据库行和发送电子邮件的函数则不然。将环境推到边缘，有趣的逻辑就变得纯、完全且易于测试。
 
-这不是 Python 的官方概念，但它与 Python 的 multi-paradigm 风格，以及 [imperative.md](./imperative.md) 中描述的 entry-point boundary discipline 自然契合。
+这不是一个官方的 Python 概念，但它自然地与 Python 的多范式风格以及 [imperative.md](./imperative.md) 中描述的入口点边界规范相结合。
 
-## 其背后的假设
+## 底层假设
 
-- 系统里最难测试的部分不是计算，而是副作用和环境耦合。
-- 一旦副作用被推到边界，core 就可以用普通 data in、data out 的方式测试，不需要 mock、fixture，也不需要 patch clock。
-- Shell 仍然需要认真设计，因为 transactions、retries、error handling、logging 和 resource lifecycle 都在那里。
+- 系统中测试成本高的部分是其副作用和环境耦合，而不是其计算。
+- 一旦副作用被推到边界，核心就可以用纯数据输入、纯数据输出进行测试——无需模拟、无需固件、无需修补时钟。
+- 外壳仍然需要真正的设计工作，因为事务、重试、错误处理、日志记录和资源生命周期都生活在那里。
 
-## 好处
+## 优势
 
-- **Testability.** Core tests 是 example-based 的：传入 data，断言返回 data。没有 I/O 设置，没有 mock framework，速度快且确定。这是最大的收益。
-- **Reasoning.** 一个 pure function 的行为完全由它的参数决定。你可以独立理解它，而无需追踪它接触了哪些全局 state 或外部 service。
-- **Composability.** Pure functions 可以干净地组合——一个的输出成为下一个的输入，不存在隐藏的顺序约束。Shell 只负责显式地排列那些不纯步骤。
+- **可测试性。** 核心测试是基于示例的：传入数据，断言返回的数据。没有 I/O 设置，没有模拟框架，快速且确定性。这是最大的收益。
+- **可推理性。** 纯函数的行为完全由其参数决定。你可以在隔离中理解它，而无需追踪它触及了什么全局状态或外部服务。
+- **可组合性。** 纯函数组合得很干净——一个的输出馈入下一个，没有隐藏的顺序约束。外壳一次性显式地编排不纯的步骤。
 
-## 何时适用
+## 何时应用
 
-凡是有趣的 decision 可以与执行动作分离的地方，都适合使用它：
+在有趣的决策可以与执行行为分离的任何地方应用它：
 
-- Domain rules：pricing、eligibility、permission checks、state transitions（见 [state-machine.md](./state-machine.md)，其中 `(state, event) -> new_state` reducer 就是 textbook functional core）。
-- 在数据触及 persistence 之前，对 input 做 validation 和 normalization。
-- Data transformation pipelines，其中 transform rules 是 pure 的，而只有读写两端是不纯的。
-- CLI 和 request handlers：shell 解析 arguments 或 HTTP，组装 dependencies，调用一个纯 planner；core 返回一个 decision 或需要执行的工作描述。
+- 领域规则：定价、资格、权限检查、状态转换（参见 [state-machine.md](./state-machine.md)，其中 `(state, event) -> new_state` 归约器是教科书式的函数式核心）。
+- 输入在接触持久化之前的验证和规范化。
+- 数据转换管道，其中转换规则是纯的，只有读/写端点是不纯的。
+- CLI 和请求处理器：外壳解析参数或 HTTP、组装依赖、调用纯规划器；核心返回决策或要完成的工作描述。
 
-一种有用的形状是让 core 返回一个对副作用的 _description_（commands 列表、event、typed result），由 shell 去执行它们。core 做决定；shell 执行。
+一个有用的模式是让核心返回一个副作用的*描述*（一系列命令、一个事件、一个类型化结果），并让外壳执行它们。核心决策；外壳执行。
 
 ```python
-# core: pure, no I/O — trivial to test with data in, data out
+# 核心：纯函数，无 I/O——用数据输入数据输出即可轻松测试
 def plan_discount(cart: Cart, customer: Customer) -> DiscountPlan:
     if customer.tier == "gold" and cart.total > 100:
         return DiscountPlan(percent=15, reason="gold-large-order")
     return DiscountPlan(percent=0, reason="none")
 
 
-# shell: imperative, owns I/O, transactions, logging
+# 外壳：命令式，拥有 I/O、事务、日志
 def apply_discount(cart_id: str, customer_id: str) -> None:
     cart = repo.load_cart(cart_id)          # I/O
     customer = repo.load_customer(customer_id)  # I/O
-    plan = plan_discount(cart, customer)    # pure decision
+    plan = plan_discount(cart, customer)    # 纯决策
     repo.save_discount(cart_id, plan)       # I/O
     logger.info("applied %s", plan.reason)  # I/O
 ```
 
-`plan_discount` 的测试只需要构造一个 `Cart` 和 `Customer`，调用函数，然后断言返回的 `DiscountPlan`——不需要 database，不需要 mocks，也不需要 patch clock。这个 discount 规则的每个分支都能用一行 setup 触达。相比之下，shell 可以用少量 integration tests 来验证，或者本身薄到直接阅读就足够。
+`plan_discount` 的测试构造一个 `Cart` 和 `Customer`，调用函数，并断言返回的 `DiscountPlan`——没有数据库，没有模拟，没有修补时钟。折扣规则的每个分支都可以通过单行设置来覆盖。相比之下，外壳通过少量集成测试进行测试，或者薄到可以通过阅读来验证。
 
-## 当严格 purity 适得其反时
+## 何时严格纯函数适得其反
 
-- **I/O-heavy glue code.** 这类代码的全部职责就是在两个系统之间搬运 bytes，几乎没有可提取的 pure decision。强行套 functional core 只会得到一个空洞的 core 和一个掩盖真实复杂度的厚 shell。
-- **Simple CRUD.** 当操作只是“读一行、改一个字段、写回去”时，没有什么有意义的 decision 可抽。直接的 imperative function 更清楚。
-- **Copy-cost-heavy data.** 严格的 purity 不允许 mutation，所以一个天真的 core 可能会反复复制大型结构。当这个代价占主导时，可以在一个总体仍然是 pure 的 function 内部允许局部 mutation，或者在那个 seam 放宽 purity。
-- **Anemic cores.** 如果拆分之后只剩下一张由极小 pure functions 组成的迷宫，它们已经不再讲 domain language，你就是拿清晰度换教条了。让 core 继续用 domain terms 来表达。
+- **I/O 密集型胶水代码。** 其全部工作就是在两个系统之间移动字节的代码几乎没有可提取的纯决策。强行将函数式核心套用到它上面会产生一个空洞的核心和一个隐藏了真实复杂性的臃肿外壳。
+- **简单的 CRUD。** 当操作是"读取行、更新字段、写入行"时，没有有意义的决策需要隔离。直接的命令式函数比人为的拆分更清晰。
+- **复制成本高昂的数据。** 严格纯函数禁止变更，因此天真的核心可能会重复复制大型结构。当该成本占主导地位时，允许在原本纯的函数内部进行局部变更，或者在该接缝处放宽纯性。
+- **贫血核心。** 如果拆分后留下了一堆不再说领域语言的小型纯函数，那么你就用教条换来了清晰。保持核心以领域术语表达。
 
-需要警惕的失败模式是：shell 变得太薄，以至于 transactions、error handling 和 observability 无处安放，只好又流回 framework callbacks 里。Shell 是一个真实层次，不只是个 wrapper。
+需要注意的失败模式是外壳太薄，以至于事务、错误处理和可观测性无处容身，从而泄漏回框架回调中。外壳是一个真实的层，而不是一个包装器。
 
-## 边界应该画在哪里
+## 边界在哪里
 
-把线画对，是整个技巧所在。seam 应该恰好落在基于手头已有 data 做出 decision 的地方。先把这个 decision 需要的东西全部读出来，再在 core 中做决定，然后根据这个决定去执行动作——不要把读取与决策交错在一起，因为每多读一次进入逻辑中间的东西，环境就会被拖回 core。
+画好这条线是整个技能。接缝正好位于基于已有数据做出决策的地方。先把决策所需的所有内容*读取*进来，在核心中做决策，然后根据决策执行操作——不要将读取和决策交织在一起，因为每次将读取拉到逻辑中间都会把环境拖回核心。
 
-一种常见的改进方式，是让 core 返回描述 effects 的 data，而不是一个裸 value：
+一个常见的改进是让核心返回*描述*效果的数据，而不是一个裸值：
 
 ```python
-# core returns a description of what should happen — still pure
+# 核心返回应该发生什么的描述——仍然是纯函数
 def plan_effects(order: Order, now: datetime) -> list[Effect]:
     if order.is_overdue(now):
         return [ChargeLateFee(order.id), NotifyCustomer(order.id, "overdue")]
     return []
 
 
-# shell interprets the descriptions — the only place effects actually fire
+# 外壳解释这些描述——唯一实际触发效果的地方
 def process(order_id: str) -> None:
     order = repo.load(order_id)
     for effect in plan_effects(order, datetime.now(tz=UTC)):
         execute(effect)
 ```
 
-现在，甚至“要执行哪些 effects”的选择也可以在不真正执行它们的情况下测试：断言返回的 list 即可。Shell 收缩成一个笨拙的 interpreter，而有趣的 branching 全部留在 core 里。这和 [state-machine.md](./state-machine.md) 中 reducer 返回 `(next_state, actions)` 的形状是一致的。
+现在，就连*选择*执行哪些效果也是可测试的，而无需实际执行它们：断言返回的列表即可。外壳缩小为一个愚蠢的解释器，所有有趣的分支都在核心中。这与 [state-machine.md](./state-machine.md) 归约器返回 `(next_state, actions)` 时的形状相同。
 
-`datetime.now(tz=UTC)` 这个 clock 是在 shell 中读取的，然后作为 `now` 传入 core。正是这个动作，才让与时间相关的规则保持 pure 且可确定测试。
+时钟 `datetime.now(tz=UTC)` 在外壳中读取，并作为 `now` *传入*核心。这一举措就是保持时间相关规则纯且确定性可测试的原因。
 
 ## 在 Python 中
 
-- Entry layers 可以使用 argparse、Click、Typer、FastAPI 或 Django，但 core business functions 不应依赖 framework objects——在边界上传递普通 data。
-- 把边界 data 放在 `dataclass`、`TypedDict`、Pydantic model 或普通 dict 中，依据项目复杂度选择（见 [data-oriented.md](./data-oriented.md)）。
-- 不稳定的依赖——clock、randomness、filesystem、HTTP client、database session——应以函数参数、构造参数、一个小 `Protocol`，或通过 composition root 注入，而不是在 core 内部直接获取。
-- Core 应该接收普通 data 并返回普通 data；shell 负责 `with` / `async with` 的 resource lifecycles（见 [resource-lifecycle.md](./resource-lifecycle.md)）。
+- 入口层可以使用 argparse、Click、Typer、FastAPI 或 Django，但核心业务函数不应依赖框架对象——跨边界传递纯数据。
+- 在边界处使用 `dataclass`、`TypedDict`、Pydantic 模型或普通字典承载数据，根据项目的复杂性选择（参见 [data-oriented.md](./data-oriented.md)）。
+- 将不稳定的依赖项——时钟、随机性、文件系统、HTTP 客户端、数据库会话——作为函数参数、构造函数参数、小型 `Protocol` 或通过组合根注入，而不是在核心内部获取它们。
+- 核心应接受纯数据并返回纯数据；外壳拥有 `with`/`async with` 资源生命周期（参见 [resource-lifecycle.md](./resource-lifecycle.md)）。
 
-## 与其他 paradigms 的关系
+## 与其他范式的交互
 
-- 直接建立在 [imperative.md](./imperative.md) 上：shell 本身就是刻意保持很薄的 imperative orchestration layer。
-- Pure core 是 [data-oriented.md](./data-oriented.md) 思维发挥作用的地方——plain data in，plain data out。
-- 对于 lifecycle logic，core 中的 pure reducer 加上执行 effects 的 shell，是构建 [state-machine.md](./state-machine.md) 最清晰的方式。
+- 直接建立在 [imperative.md](./imperative.md) 之上：外壳*就是*命令式编排层，有意保持薄薄的一层。
+- 纯核心是 [data-oriented.md](./data-oriented.md) 思维发挥价值的地方——纯数据输入，纯数据输出。
+- 对于生命周期逻辑，核心中的纯归约器加上执行效果的外壳是构建 [state-machine.md](./state-machine.md) 最清晰的方式。

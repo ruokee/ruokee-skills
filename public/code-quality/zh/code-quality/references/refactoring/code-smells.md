@@ -1,38 +1,38 @@
-# Code Smells
+# 代码坏味（Code Smells）
 
-## 什么是 smell
+## 什么是坏味
 
-code smell 是一个 **表面症状，提示可能存在更深层的结构问题** - 但它不是问题本身，也不是判决。Kent Beck 这个词故意借用了“异味”的比喻：它让你停下来仔细看一眼，但并不能证明一定有问题。一个长函数可能是问题，也可能只是清晰的线性流程。duplicated code 可能在三个地方编码了同一条规则，也可能只是三个今天看起来相似的片段。
+代码坏味是一个**表明更深层结构问题的表面症状**——但它不是问题本身，也不是一个判决。Kent Beck 故意用这个类比：就像气味让你停下来靠近看，而不是证明一定有东西坏了。一个长函数可能是个问题，也可能是一个清晰的线性序列，读起来没问题。重复代码可能是一个规则在三处编码，也可能是三个今天只是看起来相似的片段。
 
-这个区别 - 症状，而不是诊断 - 是 smell 最重要的地方。把 smell 当成自动缺陷，会导致机械式“修复”，反而把代码搞坏：对本不该拆分的函数进行提取，把并不是真重复的代码去重，为从未出现的变化引入抽象。smell 是一次调查邀请，而调查完全可能得出“这没问题”。
+这个区别——症状，而非诊断——是坏味最重要的一点。将坏味视为自动缺陷会导致机械性的"修复"，反而使代码更糟：提取不需要提取的函数，去重并非真正重复的代码，为永远不会到来的变化引入抽象。坏味是邀请你去调查，而调查可以合理地得出结论："这没问题。"
 
 ## 主要类别
 
-Fowler 和 Beck 把 smells 分成几类。知道这些类别有助于你快速找到合适的修法。
+Fowler 和 Beck 将坏味分为若干家族。了解家族有助于你选择合适的修复方式。
 
-- **Bloaters** - 代码长得太大，不便处理。Long Function、Large Class、Long Parameter List、Data Clumps、Primitive Obsession。它们往往是逐步累积出来的；每次新增看起来都合理，直到整体变得笨重。见 [long-function.md](./long-function.md) 和 [primitive-obsession.md](./primitive-obsession.md)。
-- **Object-orientation abusers** - 对 OO 机制使用不完整或不正确。应当用多态的地方用了 Switch Statements、Refused Bequest、Temporary Field、Alternative Classes with Different Interfaces。
-- **Change preventers** - 结构让一次改动不得不连带很多地方。Divergent Change（一个模块因为很多理由被改）和 Shotgun Surgery（一次改动散落到很多模块）是两个经典且相对的形态。见 [divergent-change.md](./divergent-change.md) 和 [shotgun-surgery.md](./shotgun-surgery.md)。
-- **Dispensables** - 少了反而更清爽的东西。Duplicated Code、Dead Code、Speculative Generality、Lazy Element（一个没有真正贡献的 class 或 function - 与 thin wrapper 密切相关，见 [thin-wrapper-function.md](./thin-wrapper-function.md)）、用来解释糟糕代码的注释。见 [duplicated-code.md](./duplicated-code.md)。
-- **Couplers** - 模块之间耦合过强的 smell。Feature Envy、Inappropriate Intimacy、Message Chains、Middle Man。见 [feature-envy.md](./feature-envy.md)。
+- **臃肿体（Bloaters）**——代码变得过于庞大难以舒服地处理。过长函数（Long Function）、过大类（Large Class）、过长参数列表（Long Parameter List）、数据泥团（Data Clumps）、基本类型偏执（Primitive Obsession）。它们逐渐累积；每次添加似乎都合理，直到整体变得笨重。参见 [long-function.md](./long-function.md) 和 [primitive-obsession.md](./primitive-obsession.md)。
+- **面向对象滥用者（Object-orientation abusers）**——对 OO 机制的不完整或不正确使用。本应是多态的 Switch 语句、被拒绝的遗赠（Refused Bequest）、临时字段（Temporary Field）、具有不同接口的替代类（Alternative Classes with Different Interfaces）。
+- **变更阻止者（Change preventers）**——一个变更迫使许多其他变更的结构。发散式变更（Divergent Change，一个模块因多种原因被修改）和霰弹式修改（Shotgun Surgery，一个变更分散在多个模块中）是两种典型的、互逆的形式。参见 [divergent-change.md](./divergent-change.md) 和 [shotgun-surgery.md](./shotgun-surgery.md)。
+- **可有可无者（Dispensables）**——没有它们代码会更干净的东西。重复代码（Duplicated Code）、死代码（Dead Code）、投机性泛化（Speculative Generality）、懒惰元素（Lazy Element，一个没有发挥应有作用的类或函数——与过薄包装密切相关，参见 [thin-wrapper-function.md](./thin-wrapper-function.md)）、用于解释糟糕代码的注释（Comments）。参见 [duplicated-code.md](./duplicated-code.md)。
+- **耦合者（Couplers）**——模块间过度耦合的坏味。依恋情节（Feature Envy）、不恰当的亲密关系（Inappropriate Intimacy）、消息链（Message Chains）、中间人（Middle Man）。参见 [feature-envy.md](./feature-envy.md)。
 
-这些类别会相互重叠，一段代码可能同时具备好几种。这个分类的目的在于帮助回忆 - 当感觉不对劲时，这些家族会提示你该如何命名你看到的东西。
+这些类别有重叠，同一段代码可能表现出多种坏味。分类的作用是帮助回忆——当感觉不对时，这些家族提示你命名所见之物。
 
-## 如何分诊：现在值得修吗？
+## 如何分类处理：现在值得修复吗？
 
-发现 smell 很容易。真正需要判断的是要不要动手，而答案经常是“现在先别”。可以快速分诊：
+发现坏味是容易的部分。判断是否要行动，而答案常常是"现在不"。快速分类处理：
 
-1. **它是被证实的问题，还是只是看起来像？** 先看表面下面的东西。重复的代码到底是不是同一条规则，还是两个只是长得像的片段？这个长函数是在混合抽象层次，还是只是一个清晰序列？如果你说不出底层结构问题是什么，就先停在这里。
-2. **它挡住你了吗？** 在你正在改、或者马上要改的代码里的 smell 值得修 - 为后续改动做准备、提升理解的 refactoring 都会立刻回本。那些稳定、没人碰的代码，通常最好别动；改动工作代码的风险往往大于整洁收益。
-3. **放着不管的代价是什么？** 高风险的知识重复（安全、金钱、协议契约、schema）即使只出现一次，也值得尽早修，因为分叉的代价很高。一个稍微长一点、但安静的角落函数，不值得。
-4. **有安全网吗？** 如果你不能确认行为被保留，就先别重构。见 [safe-refactoring.md](./safe-refactoring.md)。
+1. **它是确认的，还是仅仅是外观？** 看透表象。重复的代码真的是同一个规则，还是两个看起来相似的东西？长函数是混合了抽象层级，还是一个清晰的序列？如果你不能阐明底层的结构问题，就此打住。
+2. **它挡了你的路吗？** 你在积极修改或即将修改的代码中的坏味值得修复——预备性和理解性重构能立即得到回报。稳定的、没人碰的代码中的坏味通常最好不管；修改工作代码的风险超过了整洁的收益。
+3. **放任它的成本是多少？** 高风险的知识重复（安全、金钱、协议契约、模式）无论出现频率多低都值得立即修复，因为分叉的成本太高。安静角落里一个稍微有点长的函数则不然。
+4. **有安全网吗？** 如果你不能验证行为被保留，暂时不要重组。参见 [safe-refactoring.md](./safe-refactoring.md)。
 
-分诊的目标，是把重构精力花在能降低真实未来成本的地方，而不是把所有 smell 数量都清零。
+分类的目标是将重构精力花在能够降低实际未来成本的地方，而不是将每个坏味计数都归零。
 
-## Agent 辅助开发中的 smells
+## 代理辅助开发中的坏味
 
-Agentic coding 提高了代码生成速度，也加快了 smells 出现的速度。典型问题不是“代码看起来不像人写的”，而是结构性的：重复的 adapter、薄 wrapper helper、过宽的 Protocol、 speculative registry、深层 mock、同一条领域规则分别写在 schema、service 和 test fixture 里。因为产量更高，smell detection 也必须比传统手写代码更主动、更有意识 - 但上面的分诊原则更重要，因为真正的诱惑是机械地“清理”掉 agent 产出的所有东西。
+代理编码既提高了代码生产速度，也提高了坏味出现的速度。典型问题不是"代码看起来不像是人写的"，而是结构性的：重复的适配器、过薄的包装辅助函数、过宽的 Protocol、投机性的注册表、深度 mock、同一领域规则在模式、服务和测试夹具中分别编写。由于代码量更大，坏味检测需要比传统手写代码更主动、更刻意——但上面的分类纪律也更重要，因为机械性地"清理"代理产生的所有东西的诱惑是存在的。
 
-## 与专门文档的关系
+## 与各独立文档的关系
 
-这篇文档是地图。这个目录里的每个叶子文档都深入讲一种 smell 或一种转换：它到底是什么、哪些信号能区分真问题和误报、什么时候这个 smell 其实可以接受、以及哪个命名 refactoring 负责处理它。分诊判断这个 smell 值得调查之后，就去对应的具体文档。具体转换 - Extract Function、Inline Function、Move Function - 分别在 [extract-function.md](./extract-function.md)、[inline-function.md](./inline-function.md) 和 [move-function.md](./move-function.md) 中，而安全应用这些方法的整体纪律则写在 [fowler-refactoring.md](./fowler-refactoring.md)。
+本文档是地图。本目录中的每个独立叶子文档深入探讨一个坏味或一种变换：它到底是什么，区分真正问题和误报的信号，坏味何时实际上是可接受的，以及哪个命名重构来处理它。当分类认为某个坏味值得调查时，请跳转到具体文档。变换本身——提取函数（Extract Function）、内联函数（Inline Function）、移动函数（Move Function）——位于 [extract-function.md](./extract-function.md)、[inline-function.md](./inline-function.md) 和 [move-function.md](./move-function.md)，而安全应用它们的整体纪律位于 [fowler-refactoring.md](./fowler-refactoring.md)。

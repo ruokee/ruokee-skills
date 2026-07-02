@@ -1,39 +1,39 @@
 # SOLID
 
-SOLID 是五条面向对象设计原则的集合——Single Responsibility、Open/Closed、Liskov Substitution、Interface Segregation、Dependency Inversion——由 Robert C. Martin 以 _dependency management_ 为主题整理而成。它们共同的目标是控制耦合以及变更方向，使系统在成长过程中依然保持灵活、稳健和可复用。
+SOLID 是一组五个面向对象设计原则——单一职责、开闭、里氏替换、接口隔离、依赖反转——由 Robert C. Martin 以*依赖管理*之名汇集而成。它们的共同目的是控制耦合和变更的方向，使系统在增长过程中保持灵活、健壮和可复用。
 
-在讨论这些原则之前，先说两个框架。第一，应用单位不一定总是 class。这里的 “module” 可以是 function、module、package 或 service object——Python 通常不需要 Java SOLID 示例那种按概念切 class 的密度。第二，这些原则是 review 的 _问题_，不是模板。它们的价值在于问“这里会变什么、contract 是什么、dependency boundary 在哪里”，而不是机械地产生 interface 和 factory。把 SOLID 当模板用，往往会得到 class explosion 和违反 [kiss.md](./kiss.md) 的间接层。
+在具体介绍这些原则之前，有两个框架性的要点。首先，应用的单位不总是类。这里的"模块"可以是函数、模块、包或服务对象——Python 很少需要 Java SOLID 示例中所假设的那种每个概念一个类的密度。其次，这些是审查*问题*，而不是模板。其价值在于问"这里什么东西在变化、契约是什么、依赖边界在哪里"，而不是机械地产生接口和工厂。如果当作模板使用，SOLID 会产生类爆炸和间接层，违反 [kiss.md](./kiss.md)。
 
-## Single Responsibility Principle
+## 单一职责原则（Single Responsibility Principle）
 
-SRP 通常表述为“一个 module 只有一个变更原因”。这里的 reason-to-change 比常见误读“一个 class 只做一件事”更重要。一个 responsibility 对应的是一个 _变更来源_——一个 actor、一个 stakeholder、或一条独立演化的规则。合适的粒度来自 cohesion，而不是来自尽量减少单元做的事情数量。
+SRP 通常表述为"一个模块应该只有一个变更原因"。变更原因（reason-to-change）的框架比流行的误读"一个类只做一件事"更为重要。一个职责与*变更来源*相关联——一个参与者、一个干系人、一条独立演进的规则。正确的粒度来自于内聚性（cohesion），而不是最小化每个单元所做的事情。
 
-SRP 要捕捉的 smell 是：一个 module 把业务规则、展示格式化、持久化和外部 API 适配混在一起，于是任何一项变化都可能牵连其他部分。人们在应用 SRP 时常犯的错误是：把一个本来内聚的对象拆成很多贫血 helper，逻辑被四处分散，内聚反而下降。要问的是“这段代码是否回应了不止一种规则、角色或外部系统？”——而不是“这个 function 是否做了超过一个小事情？”在入口点，解析、配置、日志和依赖装配可以放在一起；业务规则应该移到 core。
+SRP 捕获的坏味道：一个模块混合了业务规则、展示格式、持久化和外部 API 适配，以至于对其中任何一个的修改都会危及其他。人们在*应用* SRP 时犯的错误：将一个内聚的对象打碎成许多贫血的辅助函数，这分散了逻辑并降低了内聚性。问"这段代码是否响应超过一种规则、角色或外部系统？"——而不是"这个函数是否做了超过一件小事？"在一个入口点，解析、配置、日志和依赖装配可以放在一起；业务规则应该移出到核心。
 
-## Open/Closed Principle
+## 开闭原则（Open/Closed Principle）
 
-OCP：一个稳定的 core 应该对扩展开放、对修改关闭——也就是通过添加新的 implementation、strategy 或 config 来增加行为，而不是每次都回到 core 里改它。现代、务实的解读有一个前提：只有当 variation 的方向稳定且确实会重复出现时，建立扩展点才值得。
+OCP：稳定的核心应对扩展开放，对修改关闭——你通过添加新的实现、策略或配置来增加行为，而不是每次重新打开和编辑核心。现代实用的解读是条件性的：只有当变化的方向稳定且变化实际重复发生时，扩展点才值得构建。
 
-这使 OCP 与 [yagni.md](./yagni.md) 直接形成张力。为一个假想中的第二个 implementation 构建 plugin architecture，就是 speculative generality。解决方式是：先用一个简单的 branch 或 mapping；只有在真实的第二个（最好是第三个——见 [rule-of-three.md](./rule-of-three.md)）variation 出现后，再引入 registry、dispatch table 或 Protocol。在 Python 中，扩展机制通常是 registry、entry points、config-to-function mapping、`Protocol`、decorator 或 strategy function——不一定非得是 inheritance hierarchy，因为那通常会产生 fragile base class。
+这使得 OCP 与 [yagni.md](./yagni.md) 存在直接张力。为一个假设的第二个实现构建插件架构是投机性的通用化。解决方案：从简单的分支或映射开始；只有在真正出现了第二个（最好第三个——见 [rule-of-three.md](./rule-of-three.md)）变化后才引入注册表、分发表或 Protocol。在 Python 中，扩展机制通常是注册表、入口点、配置到函数的映射、`Protocol`、装饰器或策略函数——不一定是继承层次结构（后者往往产生脆弱的基类）。
 
-## Liskov Substitution Principle
+## 里氏替换原则（Liskov Substitution Principle）
 
-LSP：subtype 必须可以在任何期待 base type 的地方使用，而不会破坏程序的预期。关键字是 _behavior_，不是 signature。方法名和类型一致是必要条件，但还不够；subtype 还必须遵守 base 的 precondition（不能更苛刻）、postcondition（不能少承诺）、invariants 以及 exception semantics。
+LSP：子类型必须可以在任何期望其基类型的地方使用，而不破坏程序的预期。关键词是*行为*，而非签名。匹配方法名和类型是必要但不充分的；子类型还必须遵守基类型的前提条件（不能要求更多）、后置条件（不能承诺更少）、不变量和异常语义。
 
-经典违规：subclass 缩小了方法能接受的输入，或者把继承来的 method 改成 no-op 或 `raise NotImplementedError`，或者仅仅为了复用代码而 subclassing，但根本没有真实的 _is-a_ 关系。在 Python 中，duck typing 和 `Protocol` 只表达结构——behavioral contract 仍然活在 tests 和文档里。当你只是想复用实现时，优先使用 composition、小型 mixin 或 helper function，而不是 inheritance，这样你就不会做出自己无法兑现的 substitutability 承诺（见 [composition-over-inheritance.md](./composition-over-inheritance.md)）。
+经典违规：子类缩小了方法接受的参数范围，或将继承的方法变成空操作或 `raise NotImplementedError`，或纯粹为了复用代码而子类化却没有真正的*is-a*关系。在 Python 中，鸭子类型和 `Protocol` 只表达结构——行为契约仍然存在于测试和文档中。当你只想复用一个实现时，优先选择组合、小型 mixin 或辅助函数而非继承，这样你就永远不会做出无法兑现的可替换性承诺（参见 [composition-over-inheritance.md](./composition-over-inheritance.md)）。
 
-## Interface Segregation Principle
+## 接口隔离原则（Interface Segregation Principle）
 
-ISP：不能强迫 client 依赖它们根本不用的方法。过宽的 “god interface” 会把每个 client 绑到每次变化上，还会迫使 test double 实现无关方法。应当按照真实 caller 实际需要的内容来拆分 interface。
+ISP：客户端不应被迫依赖它们不使用的方法。一个宽泛的"上帝接口"将每个客户端与每次变更耦合起来，并迫使测试替身实现不相关的方法。按照真实调用者实际需要的方向拆分接口。
 
-在 Python 中，这很少意味着 Java 式的 interface class。更常见的是使用小的 `Protocol`、普通 callable、module-level function，或者一个只携带 caller 需要能力的参数对象。不要为了一个函数硬造一个 interface；一个内部的一次性调用不需要声明式 interface——让函数只接收它真正使用的对象即可。一个好经验是：当 test double 需要 stub 代码根本不会调用的方法时，这个 interface 就太宽了。
+在 Python 中，这很少意味着 Java 风格的接口类。使用小型 `Protocol`、普通可调用对象、模块级函数或仅携带调用者所需能力的参数对象。不要为每个函数制造一个接口；内部的一次性调用不需要声明接口——只需让函数接受它真正使用的对象即可。一个好的启发法：当测试替身必须存根（stub）被测代码从未调用的方法时，接口就太宽了。
 
-## Dependency Inversion Principle
+## 依赖反转原则（Dependency Inversion Principle）
 
-DIP：高层 policy 不应依赖低层 detail；二者都依赖 abstraction，而这个 abstraction 由高层代码需要什么来定义（而不是从 detail 中泄漏上来）。这能让业务规则摆脱数据库、HTTP、文件系统、时钟、随机数以及 framework 细节。Dependency Injection 只是实现 DIP 的一种 _技术_——把 dependency 从外部传入，而不是在内部构造或查找。完整讨论见 [dependency-inversion.md](./dependency-inversion.md)。
+DIP：高层策略不应依赖于低层细节；两者都应依赖于抽象，且抽象由高层代码所需的内容（而非从细节泄露上来的内容）来定义。这使业务规则不受数据库、HTTP、文件系统、时钟、随机性和框架细节的影响。依赖注入（Dependency Injection）是实现 DIP 的一种*技术*——从外部传入依赖，而非在内部构造或查找依赖。完整的论述请参见 [dependency-inversion.md](./dependency-inversion.md)。
 
-常见错误是把 DIP 等同于 DI container，或者把稳定的标准库代码也反转掉，仿佛它们将来会需要替换。在 Python 中，应优先使用 constructor parameters、function parameters、小 `Protocol` 和 factory function，并在 composition root（`main()`、app 启动、framework entry）中装配具体依赖。
+常见的错误是将 DIP 等同于 DI 容器，或对稳定的标准库代码（永远不需要替换）反转依赖。在 Python 中，优先选择构造函数参数、函数参数、小型 `Protocol` 和工厂函数，在组合根（composition root）（`main()`、应用启动、框架入口）处装配具体依赖。
 
 ## SOLID 的张力与过度使用
 
-每条原则都在推动更多结构——更多 interface、更多间接层、更多注入点。如果不加判断地应用这一整套，就会得到 [kiss.md](./kiss.md) 和 [yagni.md](./yagni.md) 所警惕的那种过度设计、难以阅读的代码。具体张力包括：OCP vs YAGNI（扩展点 vs 投机）、ISP vs 简单性（接口数量）、DIP vs 简单 wiring（间接性 vs 可追踪性）。应当在变更频繁且代价高的地方使用 SOLID——长期存在的业务系统、库、framework、SDK、plugin point——而把小脚本和稳定 module 放在一边。把 SOLID 当成一组关于变更与耦合的 review 问题，让 Python 的 function、Protocol、composition 和参数注入成为默认答案，而不是 ABC 和 container。
+每个原则都倾向于更多结构——更多接口、更多间接层、更多注入点。如果不加判断地应用，这套原则会产生恰好是 [kiss.md](./kiss.md) 和 [yagni.md](./yagni.md) 所警告的过度工程化、难以阅读的代码。具体的张力：OCP vs YAGNI（扩展点 vs 投机）、ISP vs 简单性（接口数量）、DIP vs 简单装配（间接层 vs 可追溯性）。其纪律是：在变更频繁且代价高昂的地方应用 SOLID——长期存在的业务系统、库、框架、SDK、插件点——而让小型脚本和稳定模块保持原样。将 SOLID 视为关于变更和耦合的一组审查问题，并让 Python 的函数、Protocol、组合和参数注入成为默认答案，而非 ABC 和容器。
