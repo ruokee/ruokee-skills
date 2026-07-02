@@ -12,10 +12,9 @@ Current status:
 Planned top-level layout:
 
 ```text
-skills/
-├── public/
-├── experimental/
-└── third-party/
+public/
+experimental/
+third-party/
 ```
 
 Directory meaning:
