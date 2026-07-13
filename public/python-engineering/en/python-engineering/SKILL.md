@@ -36,7 +36,7 @@ Route to leaf documents by signal. Read only what the task requires.
 | Runtime/dev/optional dependencies, lock, groups | [dependency-management](references/project/dependency-management.md) | uv, structure |
 | Code style, PEP 8 vs formatter/review boundary | [style](references/spec/style.md) | ruff, custom-lint |
 | Type hints, annotations, `Any`, `cast`, Protocol, generics, type alias, type parameters | [type-hint](references/spec/type-hint.md) | python-version, ty |
-| Test structure, fixture, parametrize, behavior coverage | [testing](references/spec/testing.md) | pytest, coverage |
+| Test organization, fixtures, parametrize, exceptions/warnings, log/output capture, mocking boundary, async | [testing](references/spec/testing.md) | pytest, code-quality testing |
 | Docstring, API docs, schema metadata, information placement | [docstrings-api-docs](references/spec/docstrings-api-docs.md) | type-hint |
 | Project-specific mechanical rules, custom lint | [custom-lint](references/spec/custom-lint.md) | flake8-plugin, pre-commit |
 | `match`/`case`, structural pattern matching | [match-case](references/grammar/match-case.md) | type-hint |
@@ -52,7 +52,7 @@ Route to leaf documents by signal. Read only what the task requires.
 | ty as fast type checker, LSP feedback | [ty](references/tooling/ty.md) | type-hint, mypy, basedpyright |
 | mypy strict, legacy gate | [mypy](references/tooling/mypy.md) | type-hint, ty, basedpyright |
 | basedpyright strict, Pyright comparison | [basedpyright](references/tooling/basedpyright.md) | type-hint, ty, mypy |
-| pytest config, discovery, import mode, fixtures | [pytest](references/tooling/pytest.md) | testing, coverage |
+| pytest runner config, discovery, import mode, markers, strict mode, plugins | [pytest](references/tooling/pytest.md) | testing |
 | coverage.py, branch coverage, threshold | [coverage](references/tooling/coverage.md) | testing, pytest |
 | pre-commit hooks, local gate, CI integration | [pre-commit](references/tooling/pre-commit.md) | custom-lint, ruff |
 | Flake8 plugin mechanics for custom lint | [flake8-plugin](references/tooling/flake8-plugin.md) | custom-lint, pre-commit |

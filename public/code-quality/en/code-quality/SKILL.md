@@ -1,17 +1,17 @@
 ---
 name: code-quality
-description: General code quality review and design guidance covering design principles, design patterns, refactoring, programming paradigms, code smells, state machines, resource lifecycle, abstraction quality, and Agent/Skill configuration smells. Use when asked to evaluate code quality, design tradeoffs, refactoring opportunities, paradigm fit, abstraction boundaries, or AGENTS.md/SKILL.md/configuration quality.
+description: General code quality review and design guidance covering design principles, design patterns, refactoring, programming paradigms, code and test smells, test quality, state machines, resource lifecycle, abstraction quality, and Agent/Skill configuration smells. Use when asked to evaluate code or test quality, design tradeoffs, refactoring opportunities, test-suite maintainability, paradigm fit, abstraction boundaries, or AGENTS.md/SKILL.md/configuration quality.
 ---
 
 # Code Quality
 
-Use this Skill to judge whether code, architecture, refactoring plans, abstractions, design principles, design patterns, programming paradigms, and Agent configuration have reasonable structure, change boundaries, and maintenance cost.
+Use this Skill to judge whether code, tests, architecture, refactoring plans, abstractions, design principles, design patterns, programming paradigms, and Agent configuration have reasonable structure, change boundaries, and maintenance cost.
 
 For Python code review or daily Python self-check, also use `python-engineering` unless the user explicitly narrows the scope.
 
 ## Entry Conditions
 
-Activate this Skill for maintainability, design quality, abstraction boundaries, refactoring, code smells, programming-paradigm choice, design-pattern use, design principles, or Agent/Skill configuration quality. The reference leaves cover design principles, design patterns, refactoring, programming paradigms, and agentic-coding; load them by signal, not by reading everything.
+Activate this Skill for maintainability, design quality, test quality or test smells, abstraction boundaries, refactoring, code smells, programming-paradigm choice, design-pattern use, design principles, or Agent/Skill configuration quality. The reference leaves cover design principles, design patterns, refactoring, testing, programming paradigms, and agentic-coding; load them by signal, not by reading everything.
 
 ## Mode Selection
 
@@ -43,6 +43,8 @@ Three modes are available. Default to fast review.
 | Inheritance vs composition, mixins, subclassing | [Composition over Inheritance](references/design-principles/composition-over-inheritance.md) | SOLID, dependency inversion |
 | Dependency inversion, DI, composition root | [Dependency Inversion](references/design-principles/dependency-inversion.md) | adapter, repository, unit of work |
 | TDD, Red-Green-Refactor, behavior-first tests | [TDD](references/design-principles/tdd.md) | safe refactoring |
+| Test design, test smells, fragile/flaky tests, over-mocking, coverage strategy, fewer stronger tests | [Testing Principles](references/testing/principles.md) | test smells, TDD |
+| Test breaks on refactor, change-detector, obscure/duplicated tests, testing config/utils | [Test Smells](references/testing/test-smells.md) | testing principles, code smells |
 | Domain-driven design, bounded contexts, domain modeling | [DDD](references/design-principles/ddd.md) | deep modules, repository |
 | Abstraction depth, information hiding, shallow modules | [Deep Modules](references/design-principles/deep-modules.md) | KISS, facade |
 | Object creation varies by type/config/env | [Factory](references/design-patterns/factory.md) | abstract factory, builder |

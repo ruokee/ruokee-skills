@@ -12,7 +12,7 @@ testpaths = ["tests"]
 addopts = "-ra"
 ```
 
-将测试放在顶层 `tests/` 目录下，使其保持在已发布包之外，并使发现过程可预测。
+将测试放在顶层 `tests/` 目录下，可以使其与可导入的生产包分开，并使发现过程可预测。测试是否包含在 sdist 或 wheel 中，取决于构建后端的包发现和 include/exclude 配置。
 
 ## conftest.py
 

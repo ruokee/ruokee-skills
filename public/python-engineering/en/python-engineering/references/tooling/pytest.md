@@ -12,7 +12,7 @@ testpaths = ["tests"]
 addopts = "-ra"
 ```
 
-Keeping tests under a top-level `tests/` directory keeps them out of the shipped package and makes discovery predictable.
+Keeping tests under a top-level `tests/` directory separates them from the importable production package and makes discovery predictable. Whether tests are included in an sdist or wheel is controlled by the build backend's package discovery and include/exclude configuration.
 
 ## conftest.py
 
