@@ -5,6 +5,7 @@ This document adapts the smux [`tmux-bridge.md`](https://github.com/ShawnPana/sm
 ## Contents
 
 - [Scope and Compatibility](#scope-and-compatibility)
+- [Bundled Script and Environment](#bundled-script-and-environment)
 - [Atomic Commands and Read Guard](#atomic-commands-and-read-guard)
 - [Command Reference](#command-reference)
 - [Target Resolution](#target-resolution)
@@ -18,16 +19,35 @@ This document adapts the smux [`tmux-bridge.md`](https://github.com/ShawnPana/sm
 
 ## Scope and Compatibility
 
-Use `tmux-bridge` only when the command is installed and the user requests it, an existing workflow already uses it, or its enforced read guard and pane labels are useful:
+Use `tmux-bridge` when the user requests it, an existing workflow already uses it, or its enforced read guard and pane labels are useful. Inspect an installed command when present:
 
 ```bash
 command -v tmux-bridge
 tmux-bridge --help
 ```
 
-This Skill includes only the reference, not the `tmux-bridge` executable or installer. Confirm actual syntax with the locally installed version. When the command is unavailable and the user did not require it specifically, use raw tmux and read [tmux.md](tmux.md).
+This Skill also bundles an adapted executable at `scripts/tmux-bridge` relative to the installed Skill root. It can be invoked directly when no command is installed. Installing it into `PATH`, overwriting an existing executable, or changing shell configuration requires the user's explicit authorization; follow [tmux-setup.md](tmux-setup.md). Confirm actual syntax with the selected executable's `--help`. When no bridge is available and the user did not require it specifically, use raw tmux and read [tmux.md](tmux.md).
 
 The bridge relay convention works best when both the sender and receiver are bridge-aware Agent panes. When the caller is outside tmux, the target is not bridge-aware, or replies do not return to the caller pane, read the target pane at moderate intervals instead.
+
+## Bundled Script and Environment
+
+The bundled script is derived from smux `tmux-bridge` 2.0.0 at the pinned revision above and identifies itself as `2.0.0-with-agents.1`. Local adaptations:
+
+- make generated messages tell receivers to load the `with-agents` Skill;
+- namespace read-guard files by user, tmux socket, and pane identity;
+- invalidate a guard when the pane is respawned or reused;
+- require a positive integer for the optional `read` line count;
+- report an empty label count correctly in `doctor`.
+
+The command observes these optional environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `TMUX_BRIDGE_SOCKET` | Select a tmux socket with `tmux -L` semantics |
+| `TMUX_BRIDGE_RUNTIME_DIR` | Override the private directory used for read-guard files |
+
+Without `TMUX_BRIDGE_RUNTIME_DIR`, guard files live in a mode-`0700`, current-user-owned `tmux-bridge-<uid>` directory under `XDG_RUNTIME_DIR`, `TMPDIR`, or `/tmp`. The guard records the current pane ID, PID, session ID, and window ID. A changed identity requires another `read` before interaction.
 
 ## Atomic Commands and Read Guard
 
@@ -60,10 +80,13 @@ error: must read the pane before interacting. Run: tmux-bridge read codex
 | `tmux-bridge list` | Show panes with target, process, size, and label | `tmux-bridge list` |
 | `tmux-bridge read <target> [lines]` | Read recent output; defaults to 50 lines upstream | `tmux-bridge read codex 100` |
 | `tmux-bridge type <target> <text>` | Type literal text without Enter | `tmux-bridge type codex "hello"` |
+| `tmux-bridge message <target> <text>` | Type a framed Agent message without Enter | `tmux-bridge message codex "Review this change"` |
 | `tmux-bridge keys <target> <key>...` | Send special keys | `tmux-bridge keys codex Enter` |
 | `tmux-bridge name <target> <label>` | Assign a pane label | `tmux-bridge name %3 codex` |
 | `tmux-bridge resolve <label>` | Resolve a label to a native pane target | `tmux-bridge resolve codex` |
 | `tmux-bridge id` | Print the current pane ID | `tmux-bridge id` |
+| `tmux-bridge doctor` | Check tmux, server, panes, and bridge state | `tmux-bridge doctor` |
+| `tmux-bridge version` | Print the executable version | `tmux-bridge version` |
 
 Treat this table as the imported revision's interface. Prefer local `--help` when versions differ.
 
@@ -86,13 +109,24 @@ Read a resolved target before relying on its label. Labels remain discovery aids
 
 ## Messaging Convention
 
-The bridge types exactly the supplied text. Frame Agent messages with a sender address:
+The bridge `type` command types exactly the supplied text. Frame Agent messages with a sender address:
 
 ```text
 [tmux-bridge from:coordinator] Please review src/auth.ts
 ```
 
 The address tells the receiving Agent where to reply. Do not invent a label or pane ID; derive it from `tmux-bridge id`, `tmux-bridge list`, or an explicit user target.
+
+When the caller runs inside tmux, `message` generates that frame automatically and adds a hint for the receiver to load `with-agents` before replying:
+
+```bash
+tmux-bridge read worker 20
+tmux-bridge message worker 'Please review src/auth.ts'
+tmux-bridge read worker 20
+tmux-bridge keys worker Enter
+```
+
+Use the manual `type` form below when the caller is outside tmux or a different explicit sender address is required.
 
 Send the framed request atomically:
 
@@ -192,6 +226,7 @@ Apply the lifecycle rules from `SKILL.md`:
 - Use labels for readability but verify the resolved pane before interacting.
 - Keep text and Enter separate.
 - Use bridge `type` for literal single-line input.
+- Use bridge `message` for a framed single-line Agent request when the caller has a tmux pane ID.
 - For safe multiline input, resolve the native target and follow the bracketed-paste procedure in [tmux.md](tmux.md) unless the installed bridge documents equivalent support.
 - Read non-Agent panes to collect output because they will not send a framed reply.
 - Do not mix raw tmux and bridge operations casually; raw commands bypass the bridge's read guard.

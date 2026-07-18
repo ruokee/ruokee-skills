@@ -31,13 +31,13 @@ command -v tmux-bridge || true
 
 将 `<requested-cli>` 替换为实际的可执行文件。根据已安装 CLI 的 `--help` 输出确认启动参数，不要依赖记忆中的语法。
 
-仅当 tmux 缺失、没有运行中的服务器、没有合适的会话存在或用户明确请求 tmux 初始化时，才阅读 [tmux-setup.md](references/tmux-setup.md)。
+仅当 tmux 缺失、没有运行中的服务器、没有合适的会话存在、附带的 bridge 需要检查或经授权安装，或用户明确请求 tmux 初始化时，才阅读 [tmux-setup.md](references/tmux-setup.md)。
 
 ## 选择 tmux 控制接口
 
 默认使用原生 tmux 命令。使用原生 tmux 创建、检查、操作、移交或关闭 pane 前，阅读 [tmux.md](references/tmux.md)。
 
-当用户请求 `tmux-bridge`、已有工作流已经使用它，或它的读取保护和标签有用时，先确认已安装 `tmux-bridge` 并检查其本地 `--help`，然后阅读 [tmux-bridge.md](references/tmux-bridge.md)。该参考文件不包含也不安装此命令。如果它不可用且用户没有明确要求使用它，则使用原生 tmux。
+当用户请求 `tmux-bridge`、已有工作流已经使用它，或它的读取保护和标签有用时，先检查 `PATH` 上的可用命令，并阅读 [tmux-bridge.md](references/tmux-bridge.md)。本 Skill 还附带一个可选的 `scripts/tmux-bridge` 可执行文件，可直接从已安装的 Skill 目录运行。将其安装到 `PATH`、覆盖已有命令或修改 shell 配置，都需要用户明确授权；遵循 [tmux-setup.md](references/tmux-setup.md)。如果没有可用的 bridge 且用户没有明确要求使用它，则使用原生 tmux。
 
 除非有文档说明的限制要求使用原生 tmux，否则一次交互只使用一种控制接口。无论使用哪种接口，都保留读取、字面输入、确认和 Enter 的顺序。
 
@@ -51,7 +51,7 @@ command -v tmux-bridge || true
 
 ## 启动 Agent CLI
 
-当没有合适的 pane 时，按照选定的控制接口参考，在预期的会话和工作目录中创建 shell pane。记录稳定的 pane target，并在发送输入前读取它。
+当没有合适的 pane 时，按照选定的控制接口参考，在预期的会话和工作目录中创建 shell pane。当调用方已经在 tmux 中且用户未选择其他会话时，在调用方当前会话中创建新的 window 或 split。这样可以通过普通的鼠标、窗口或 pane 选择直接访问，无需切换会话。用户明确选择了其他 session 或 pane 时，以该选择为准。当调用方在 tmux 外部时，优先使用用户选择的或合适的已有会话；只有没有合适会话时才创建新会话。捕获稳定的 pane target，并在发送输入前读取它。
 
 根据可执行文件以及本地 `--help` 确认过的参数构建启动命令。不要把任务文本放入 shell 启动命令。使用与后续消息相同的读取、字面输入、确认和 Enter 顺序启动 CLI。
 

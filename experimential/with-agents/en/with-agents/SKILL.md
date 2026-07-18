@@ -31,13 +31,13 @@ command -v tmux-bridge || true
 
 Replace `<requested-cli>` with the actual executable. Confirm launch arguments from the installed CLI's `--help` output instead of relying on remembered syntax.
 
-Read [tmux-setup.md](references/tmux-setup.md) only when tmux is missing, no server is running, no suitable session exists, or the user explicitly requests tmux initialization.
+Read [tmux-setup.md](references/tmux-setup.md) only when tmux is missing, no server is running, no suitable session exists, the bundled bridge needs inspection or authorized installation, or the user explicitly requests tmux initialization.
 
 ## Choose the tmux Control Interface
 
 Use raw tmux commands by default. Read [tmux.md](references/tmux.md) before creating, inspecting, operating, handing off, or closing panes with raw tmux.
 
-When the user requests `tmux-bridge`, an existing workflow already uses it, or its read guard and labels are useful, first confirm that `tmux-bridge` is installed and inspect its local `--help`. Then read [tmux-bridge.md](references/tmux-bridge.md). The reference does not bundle or install the command. If it is unavailable and the user did not require it specifically, use raw tmux.
+When the user requests `tmux-bridge`, an existing workflow already uses it, or its read guard and labels are useful, first inspect any command available on `PATH` and read [tmux-bridge.md](references/tmux-bridge.md). This Skill also bundles an optional `scripts/tmux-bridge` executable that can be run directly from the installed Skill directory. Installing it into `PATH`, overwriting an existing command, or changing shell configuration requires the user's explicit authorization; follow [tmux-setup.md](references/tmux-setup.md). If no bridge is available and the user did not require it specifically, use raw tmux.
 
 Keep one control interface for an interaction unless a documented limitation requires raw tmux. Preserve the read, literal-input, confirm, and Enter sequence with either interface.
 
@@ -51,7 +51,7 @@ When the existing Agent context remains relevant, continue the same CLI conversa
 
 ## Start an Agent CLI
 
-When no suitable pane exists, follow the selected control-interface reference to create a shell pane in the intended session and working directory. Capture a stable pane target and read it before sending input.
+When no suitable pane exists, follow the selected control-interface reference to create a shell pane in the intended session and working directory. When the caller is already inside tmux and the user has not selected another session, create the new window or split in the caller's current session. This keeps panes reachable through ordinary mouse, window, or pane selection without requiring a session switch. An explicitly selected pane or session elsewhere takes precedence. When the caller is outside tmux, prefer a user-selected or suitable existing session and create a new session only when none is suitable. Capture a stable pane target and read it before sending input.
 
 Build the launch command from the executable and only arguments confirmed by local `--help`. Keep task text out of the shell launch command. Start the CLI through the same read, literal-input, confirm, and Enter sequence used for later messages.
 

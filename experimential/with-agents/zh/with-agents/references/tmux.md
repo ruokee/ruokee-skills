@@ -1,12 +1,12 @@
 # Agent Pane 的 tmux 操作
 
-本参考用于 `with-agents` 通过原生 tmux 操作 Agent pane。仅在 tmux 缺失、首次设置服务器或初始化会话时使用 [tmux-setup.md](tmux-setup.md)。
+本参考用于 `with-agents` 通过原生 tmux 操作 Agent pane。完整的 pane 工作流都在此处；仅在 tmux 缺失、首次设置服务器或初始化会话时使用 [tmux-setup.md](tmux-setup.md)。
 
 ## 目录
 
 - [操作规则](#操作规则)
 - [目标与发现](#目标与发现)
-- [创建会话窗口和 pane](#创建会话窗口和-pane)
+- [创建会话、窗口和 pane](#创建会话窗口和-pane)
 - [复用 pane 与身份识别](#复用-pane-与身份识别)
 - [启动 Agent CLI](#启动-agent-cli)
 - [读取 pane 输出](#读取-pane-输出)
@@ -74,9 +74,20 @@ session="$(tmux display-message -p '#{session_name}')"
 
 在 tmux 外部运行时，`$TMUX_PANE` 为空。不要根据最近活动的 client 推断调用方地址。
 
-## 创建会话窗口和 pane
+## 创建会话、窗口和 pane
 
-复用合适的已有会话。仅当没有会话时，才创建一个最小的分离会话：
+当调用方已经在 tmux 内部运行时，默认使用其当前会话：
+
+```bash
+caller="${TMUX_PANE:-}"
+session="$(tmux display-message -p '#{session_name}')"
+```
+
+除非用户明确选择其他会话，否则在该会话中创建新的 Agent 窗口或分屏。这样可以通过鼠标、窗口或 pane 选择直接访问这些 pane，无需通过 `C-b s` 等方式切换会话。不要仅为了隔离 Agent 创建单独会话。
+
+用户明确选择的、属于其他会话的已有 pane 仍是有效 target。在原处复用。
+
+当调用方在 tmux 外部时，优先使用用户选择的会话或合适的已有会话。仅当没有合适的会话时，才创建一个最小的分离会话：
 
 ```bash
 session="with-agents"
@@ -105,7 +116,7 @@ target="$(
 )"
 ```
 
-当调用方在 tmux 外部，或单独的生命周期更清晰时，使用 `new-window`。记录当前交互是否创建了该 pane；清理操作取决于这一事实。
+当调用方在 tmux 外部，或在同一会话中使用单独窗口更清晰时，使用 `new-window`。记录当前交互是否创建了该 pane 和窗口；清理操作取决于这一事实。
 
 ## 复用 pane 与身份识别
 
@@ -117,7 +128,7 @@ tmux display-message -p -t "$target" \
   '#{pane_id}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}\tdead=#{pane_dead}\tpid=#{pane_pid}'
 ```
 
-当 pane 与当前对话或外层任务有关、用户明确选择了它，或已明确处于空闲状态时，尝试复用。Agent 正在执行、等待或重试的 pane 属于活跃状态，不算空闲。继续该交互，而不是启动重复进程。
+当 pane 与当前对话或外层任务有关、用户明确选择了它，或已明确处于空闲状态时，尝试复用。Agent 正在执行、等待或重试的 pane 属于活跃状态，不算空闲；继续该交互，而不是启动重复进程。
 
 除非用户明确请求，否则不要将无关的活跃工作改作他用。如果 pane 的身份或状态仍不确定，则创建新的 pane。
 
@@ -282,9 +293,9 @@ tmux clear-history -t "$target"
 tmux attach-session -t "$session"
 ```
 
-对于 tmux 外部的调用方，连接会阻塞。不要将其作为自动化观察方法运行；继续使用 `capture-pane` 和 `display-message`。
+连接会阻塞 tmux 外部的调用方。不要将其作为自动化观察方法运行；继续使用 `capture-pane` 和 `display-message`。
 
-对于特定 target，还要报告 pane ID 以及 `list-panes` 输出中的 `session:window.pane` 地址。
+对于特定 target，还要报告 pane ID 以及 `session:window.pane` 地址（来自 `list-panes` 输出）。
 
 ## 安全清理
 

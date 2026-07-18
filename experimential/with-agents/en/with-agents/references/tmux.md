@@ -76,7 +76,18 @@ Outside tmux, `$TMUX_PANE` is empty. Do not infer a caller address from the most
 
 ## Session, Window, and Pane Creation
 
-Reuse a suitable existing session. Create a minimal detached session only when none exists:
+When the caller is already inside tmux, use its current session by default:
+
+```bash
+caller="${TMUX_PANE:-}"
+session="$(tmux display-message -p '#{session_name}')"
+```
+
+Create new Agent windows or splits in that session unless the user explicitly selects a different session. This keeps the panes directly reachable through mouse, window, or pane selection instead of requiring a session switch such as `C-b s`. Do not create a separate session merely to isolate an Agent.
+
+An existing pane explicitly selected by the user remains a valid target when it belongs to another session. Reuse it in place.
+
+When the caller is outside tmux, prefer a user-selected session or a suitable existing session. Create a minimal detached session only when none is suitable:
 
 ```bash
 session="with-agents"
@@ -105,7 +116,7 @@ target="$(
 )"
 ```
 
-Use `new-window` when the caller is outside tmux or when a separate lifecycle is clearer. Record whether the current interaction created the pane; cleanup depends on that fact.
+Use `new-window` when the caller is outside tmux or when a separate window within the same session is clearer. Record whether the current interaction created the pane and window; cleanup depends on that fact.
 
 ## Pane Reuse and Identity
 

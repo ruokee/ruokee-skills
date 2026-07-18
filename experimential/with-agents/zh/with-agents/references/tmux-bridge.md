@@ -5,6 +5,7 @@
 ## 目录
 
 - [范围与兼容性](#范围与兼容性)
+- [附带脚本与环境](#附带脚本与环境)
 - [原子命令与读取保护](#原子命令与读取保护)
 - [命令参考](#命令参考)
 - [目标解析](#目标解析)
@@ -18,16 +19,35 @@
 
 ## 范围与兼容性
 
-仅在以下情况使用 `tmux-bridge`：命令已安装且用户请求使用它；已有工作流已经使用它；或它强制执行的读取保护和 pane 标签有用：
+当用户请求 `tmux-bridge`、已有工作流已经使用它，或它强制执行的读取保护和 pane 标签有用时，使用该命令。存在已安装命令时，先检查它：
 
 ```bash
 command -v tmux-bridge
 tmux-bridge --help
 ```
 
-本 Skill 仅包含参考文件，不包含 `tmux-bridge` 可执行文件或安装程序。以本地安装版本为准确认实际语法。当命令不可用且用户没有明确要求使用它时，使用原生 tmux，并阅读 [tmux.md](tmux.md)。
+本 Skill 还附带一个相对于已安装 Skill 根目录的改编可执行文件 `scripts/tmux-bridge`。没有已安装的命令时，可以直接运行它。将其安装到 `PATH`、覆盖已有可执行文件或修改 shell 配置，都需要用户明确授权；遵循 [tmux-setup.md](tmux-setup.md)。根据所选可执行文件的 `--help` 确认实际语法。如果没有可用的 bridge 且用户没有明确要求使用它，则使用原生 tmux，并阅读 [tmux.md](tmux.md)。
 
 当发送方和接收方都是支持 bridge 的 Agent pane 时，bridge relay 约定效果最好。当调用方在 tmux 外部、目标不支持 bridge，或回复没有返回调用方 pane 时，以适中的间隔读取目标 pane。
+
+## 附带脚本与环境
+
+附带脚本源自上方固定修订版中的 smux `tmux-bridge` 2.0.0，并将自身标识为 `2.0.0-with-agents.1`。本地改动包括：
+
+- 让生成的消息提示接收方加载 `with-agents` Skill；
+- 按用户、tmux socket 和 pane 身份为读取保护文件设置命名空间；
+- 当 pane 被重新生成或复用时，使读取保护失效；
+- 要求可选的 `read` 行数为正整数；
+- 在 `doctor` 中正确报告空标签数量。
+
+该命令会读取以下可选环境变量：
+
+| 变量 | 用途 |
+| --- | --- |
+| `TMUX_BRIDGE_SOCKET` | 选择一个具有 `tmux -L` 语义的 tmux socket |
+| `TMUX_BRIDGE_RUNTIME_DIR` | 覆盖用于读取保护文件的私有目录 |
+
+未设置 `TMUX_BRIDGE_RUNTIME_DIR` 时，保护文件位于当前用户拥有、权限为 `0700` 的 `tmux-bridge-<uid>` 目录中；该目录位于 `XDG_RUNTIME_DIR`、`TMPDIR` 或 `/tmp` 下。保护记录当前 pane ID、PID、session ID 和 window ID。身份发生变化后，必须再次 `read` 才能交互。
 
 ## 原子命令与读取保护
 
@@ -60,10 +80,13 @@ error: must read the pane before interacting. Run: tmux-bridge read codex
 | `tmux-bridge list` | 显示带有 target、进程、大小和标签的 pane | `tmux-bridge list` |
 | `tmux-bridge read <target> [lines]` | 读取最近的输出；上游默认读取 50 行 | `tmux-bridge read codex 100` |
 | `tmux-bridge type <target> <text>` | 输入不带 Enter 的字面文本 | `tmux-bridge type codex "hello"` |
+| `tmux-bridge message <target> <text>` | 输入不带 Enter 的带框 Agent 消息 | `tmux-bridge message codex "Review this change"` |
 | `tmux-bridge keys <target> <key>...` | 发送特殊按键 | `tmux-bridge keys codex Enter` |
 | `tmux-bridge name <target> <label>` | 为 pane 设置标签 | `tmux-bridge name %3 codex` |
 | `tmux-bridge resolve <label>` | 将标签解析为原生 pane target | `tmux-bridge resolve codex` |
 | `tmux-bridge id` | 打印当前 pane ID | `tmux-bridge id` |
+| `tmux-bridge doctor` | 检查 tmux、服务器、pane 和 bridge 状态 | `tmux-bridge doctor` |
+| `tmux-bridge version` | 打印可执行文件版本 | `tmux-bridge version` |
 
 将此表视为所导入版本的接口。版本不同时，优先使用本地 `--help`。
 
@@ -86,13 +109,24 @@ tmux-bridge resolve worker
 
 ## 消息约定
 
-bridge 会原样输入收到的文本。使用发送方地址包装 Agent 消息：
+bridge 的 `type` 命令会原样输入收到的文本。使用发送方地址包装 Agent 消息：
 
 ```text
 [tmux-bridge from:coordinator] Please review src/auth.ts
 ```
 
 该地址告诉接收方 Agent 回复位置。不要虚构标签或 pane ID；从 `tmux-bridge id`、`tmux-bridge list` 或用户明确指定的 target 中取得它。
+
+当调用方在 tmux 内部运行时，`message` 会自动生成该包装，并添加提示，让接收方在回复前加载 `with-agents`：
+
+```bash
+tmux-bridge read worker 20
+tmux-bridge message worker 'Please review src/auth.ts'
+tmux-bridge read worker 20
+tmux-bridge keys worker Enter
+```
+
+当调用方在 tmux 外部运行，或需要不同的明确发送方地址时，使用下面的手动 `type` 形式。
 
 原子地发送包装后的请求：
 
@@ -192,6 +226,7 @@ tmux-bridge keys worker Enter
 - 使用标签提高可读性，但交互前要验证解析出的 pane。
 - 保持文本与 Enter 分离。
 - 使用 bridge `type` 输入字面单行文本。
+- 当调用方有 tmux pane ID 时，使用 bridge `message` 输入带框的单行 Agent 请求。
 - 对于安全的多行输入，解析出原生 target，并遵循 [tmux.md](tmux.md) 中的 bracketed-paste 流程，除非已安装的 bridge 文档说明了等价支持。
 - 读取非 Agent pane 来收集输出，因为它们不会发送带地址的回复。
 - 不要随意混用原生 tmux 和 bridge；原生命令会绕过 bridge 的读取保护。
