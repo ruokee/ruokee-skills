@@ -186,7 +186,7 @@ Commands:
 
 Target resolution:
   Targets can be tmux native (session:window.pane, %N) or a label set via 'name'.
-  Labels are resolved automatically — e.g. 'tmux-bridge type codex "hello"' works.
+  Labels are resolved automatically — e.g. 'tmux-bridge type cc-review "hello"' works.
 
 Environment:
   TMUX_BRIDGE_SOCKET        Override the tmux server socket path

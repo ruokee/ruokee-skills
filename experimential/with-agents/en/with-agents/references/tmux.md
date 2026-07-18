@@ -7,6 +7,7 @@ Use this reference for raw tmux operations performed by `with-agents`. It covers
 - [Operating Rules](#operating-rules)
 - [Targets and Discovery](#targets-and-discovery)
 - [Session, Window, and Pane Creation](#session-window-and-pane-creation)
+- [Pane Naming](#pane-naming)
 - [Pane Reuse and Identity](#pane-reuse-and-identity)
 - [Launching an Agent CLI](#launching-an-agent-cli)
 - [Reading Pane Output](#reading-pane-output)
@@ -54,7 +55,7 @@ List all panes with fields useful for identification:
 
 ```bash
 tmux list-panes -a \
-  -F '#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}\tdead=#{pane_dead}\tpid=#{pane_pid}'
+  -F '#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{@name}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}\tdead=#{pane_dead}\tpid=#{pane_pid}'
 ```
 
 Common target forms are:
@@ -95,13 +96,25 @@ tmux has-session -t "$session" 2>/dev/null || \
   tmux new-session -d -s "$session" -n agents -c "$PWD"
 ```
 
-Create a window and capture its pane ID:
+Choose a valid pane name before creating it:
+
+```bash
+agent_type="cc"
+name="review"
+[[ "$agent_type" =~ ^[a-z]{2}$ && "$name" =~ ^[a-z]{1,6}$ ]] || \
+  { echo "invalid pane name components" >&2; exit 1; }
+pane_name="${agent_type}-${name}"
+```
+
+Use `cc` for Claude Code, `cx` for Codex, and `pi` for Pi. Choose an equivalent two-letter code for another CLI. Check existing pane labels and choose another short `name` when `pane_name` is already in use.
+
+Create a window named after the pane and capture its pane ID:
 
 ```bash
 target="$(
   tmux new-window -d -P -F '#{pane_id}' \
     -t "${session}:" \
-    -n "$window_name" \
+    -n "$pane_name" \
     -c "$working_directory"
 )"
 ```
@@ -118,6 +131,21 @@ target="$(
 
 Use `new-window` when the caller is outside tmux or when a separate window within the same session is clearer. Record whether the current interaction created the pane and window; cleanup depends on that fact.
 
+## Pane Naming
+
+Name every pane created by this Skill `<agent_type>-<name>`. The complete name must match `^[a-z]{2}-[a-z]{1,6}$`: `agent_type` is exactly two lowercase ASCII letters, and `name` is one lowercase ASCII-letter word of at most six letters. Examples include `cc-review`, `cx-build`, and `pi-trans`.
+
+Immediately after creation, store the name as both a durable pane option and a pane title:
+
+```bash
+tmux set-option -p -t "$target" @name "$pane_name"
+tmux select-pane -t "$target" -T "$pane_name"
+```
+
+When `new-window` created the target, its window already uses the same name. When `split-window` created the target inside an existing window, do not rename that window because it may contain pre-existing panes. Pane titles may be changed by the foreground application and remain discovery hints; the `@name` option is the stable automation label. Keep created-pane names unique within the current tmux server so label resolution is unambiguous.
+
+Do not rename a reused or pre-existing pane or window unless the user explicitly requests it.
+
 ## Pane Reuse and Identity
 
 Before reusing a pane, capture its latest screen and inspect its process state:
@@ -132,13 +160,7 @@ Attempt reuse when the pane is related to the current conversation or enclosing 
 
 Do not repurpose unrelated active work unless the user explicitly requests it. If pane identity or state remains uncertain, create a new pane.
 
-Optionally assign a pane title for discovery without changing global tmux configuration:
-
-```bash
-tmux select-pane -t "$target" -T "$label"
-```
-
-Pane titles may not be visible in every layout and remain hints rather than authoritative identity.
+Preserve the existing name of a reused pane. Names and titles remain discovery hints rather than authoritative identity; verify the pane ID and process state before interaction.
 
 ## Launching an Agent CLI
 
@@ -356,7 +378,7 @@ Expected: tmux screen and history controls do not reset model context. Use the A
 | Paste multiline text | `tmux paste-buffer -p -b "$buffer" -d -t "$target"` |
 | Create a window | `tmux new-window -d -P -F '#{pane_id}' ...` |
 | Create a split | `tmux split-window -d -P -F '#{pane_id}' ...` |
-| Label a pane | `tmux select-pane -t "$target" -T "$label"` |
+| Name a created pane | `tmux set-option -p -t "$target" @name "$pane_name"` and `tmux select-pane -t "$target" -T "$pane_name"` |
 | Clear tmux history | `tmux clear-history -t "$target"` |
 | Attach manually | `tmux attach-session -t "$session"` |
 | Close an owned pane | `tmux kill-pane -t "$target"` |

@@ -7,6 +7,7 @@
 - [操作规则](#操作规则)
 - [目标与发现](#目标与发现)
 - [创建会话、窗口和 pane](#创建会话窗口和-pane)
+- [Pane 命名](#pane-命名)
 - [复用 pane 与身份识别](#复用-pane-与身份识别)
 - [启动 Agent CLI](#启动-agent-cli)
 - [读取 pane 输出](#读取-pane-输出)
@@ -54,7 +55,7 @@ tmux list-sessions \
 
 ```bash
 tmux list-panes -a \
-  -F '#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}\tdead=#{pane_dead}\tpid=#{pane_pid}'
+  -F '#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{@name}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}\tdead=#{pane_dead}\tpid=#{pane_pid}'
 ```
 
 常见 target 形式包括：
@@ -95,13 +96,25 @@ tmux has-session -t "$session" 2>/dev/null || \
   tmux new-session -d -s "$session" -n agents -c "$PWD"
 ```
 
-创建窗口并捕获其 pane ID：
+创建前选择一个有效的 pane 名称：
+
+```bash
+agent_type="cc"
+name="review"
+[[ "$agent_type" =~ ^[a-z]{2}$ && "$name" =~ ^[a-z]{1,6}$ ]] || \
+  { echo "invalid pane name components" >&2; exit 1; }
+pane_name="${agent_type}-${name}"
+```
+
+Claude Code 使用 `cc`，Codex 使用 `cx`，Pi 使用 `pi`；其他 CLI 选择相应的两个字母代码。当 `pane_name` 已在当前 tmux server 中使用时，检查已有 pane 标签并另选一个简短的 `name`。
+
+创建一个以 pane 名称命名的窗口，并捕获其 pane ID：
 
 ```bash
 target="$(
   tmux new-window -d -P -F '#{pane_id}' \
     -t "${session}:" \
-    -n "$window_name" \
+    -n "$pane_name" \
     -c "$working_directory"
 )"
 ```
@@ -118,6 +131,21 @@ target="$(
 
 当调用方在 tmux 外部，或在同一会话中使用单独窗口更清晰时，使用 `new-window`。记录当前交互是否创建了该 pane 和窗口；清理操作取决于这一事实。
 
+## Pane 命名
+
+由本 Skill 创建的每个 pane 都命名为 `<agent_type>-<name>`。完整名称必须匹配 `^[a-z]{2}-[a-z]{1,6}$`：`agent_type` 恰好是两个小写 ASCII 字母，`name` 是一个长度不超过六个字母的小写 ASCII 字母单词。示例包括 `cc-review`、`cx-build` 和 `pi-trans`。
+
+创建后立即将名称同时存储为持久 pane 选项和 pane title：
+
+```bash
+tmux set-option -p -t "$target" @name "$pane_name"
+tmux select-pane -t "$target" -T "$pane_name"
+```
+
+当 `new-window` 创建 target 时，其 window 已经使用相同的名称。当 `split-window` 在已有 window 内创建 target 时，不要重命名该 window，因为其中可能包含预先存在的 pane。前台应用可能会更改 pane title，因此它仍只是发现提示；`@name` 选项是稳定的自动化标签。在当前 tmux server 内保持创建的 pane 名称唯一，使标签解析不会产生歧义。
+
+除非用户明确请求，否则不要重命名复用或预先存在的 pane 或 window。
+
 ## 复用 pane 与身份识别
 
 复用 pane 前，捕获其最新屏幕并检查进程状态：
@@ -132,13 +160,7 @@ tmux display-message -p -t "$target" \
 
 除非用户明确请求，否则不要将无关的活跃工作改作他用。如果 pane 的身份或状态仍不确定，则创建新的 pane。
 
-可以选择为 pane 设置标题，以便发现，而不改变全局 tmux 配置：
-
-```bash
-tmux select-pane -t "$target" -T "$label"
-```
-
-并非所有布局都会显示 pane 标题；标题仍然只是提示，不能作为权威身份。
+保留复用 pane 的现有名称。名称和标题仍然只是发现提示，不能作为权威身份；交互前要验证 pane ID 和进程状态。
 
 ## 启动 Agent CLI
 
@@ -356,7 +378,7 @@ tmux kill-pane -t "$target"
 | 粘贴多行文本 | `tmux paste-buffer -p -b "$buffer" -d -t "$target"` |
 | 创建窗口 | `tmux new-window -d -P -F '#{pane_id}' ...` |
 | 创建分屏 | `tmux split-window -d -P -F '#{pane_id}' ...` |
-| 标记 pane | `tmux select-pane -t "$target" -T "$label"` |
+| 为创建的 pane 命名 | `tmux set-option -p -t "$target" @name "$pane_name"` 和 `tmux select-pane -t "$target" -T "$pane_name"` |
 | 清除 tmux 历史 | `tmux clear-history -t "$target"` |
 | 手动连接 | `tmux attach-session -t "$session"` |
 | 关闭当前交互创建的 pane | `tmux kill-pane -t "$target"` |

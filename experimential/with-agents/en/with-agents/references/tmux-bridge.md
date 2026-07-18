@@ -69,8 +69,8 @@ The CLI enforces read-before-act:
 Skipping the read should fail like this:
 
 ```text
-$ tmux-bridge type codex "hello"
-error: must read the pane before interacting. Run: tmux-bridge read codex
+$ tmux-bridge type cc-review "hello"
+error: must read the pane before interacting. Run: tmux-bridge read cc-review
 ```
 
 ## Command Reference
@@ -78,12 +78,12 @@ error: must read the pane before interacting. Run: tmux-bridge read codex
 | Command | Description | Example |
 | --- | --- | --- |
 | `tmux-bridge list` | Show panes with target, process, size, and label | `tmux-bridge list` |
-| `tmux-bridge read <target> [lines]` | Read recent output; defaults to 50 lines upstream | `tmux-bridge read codex 100` |
-| `tmux-bridge type <target> <text>` | Type literal text without Enter | `tmux-bridge type codex "hello"` |
-| `tmux-bridge message <target> <text>` | Type a framed Agent message without Enter | `tmux-bridge message codex "Review this change"` |
-| `tmux-bridge keys <target> <key>...` | Send special keys | `tmux-bridge keys codex Enter` |
-| `tmux-bridge name <target> <label>` | Assign a pane label | `tmux-bridge name %3 codex` |
-| `tmux-bridge resolve <label>` | Resolve a label to a native pane target | `tmux-bridge resolve codex` |
+| `tmux-bridge read <target> [lines]` | Read recent output; defaults to 50 lines upstream | `tmux-bridge read cc-review 100` |
+| `tmux-bridge type <target> <text>` | Type literal text without Enter | `tmux-bridge type cc-review "hello"` |
+| `tmux-bridge message <target> <text>` | Type a framed Agent message without Enter | `tmux-bridge message cc-review "Review this change"` |
+| `tmux-bridge keys <target> <key>...` | Send special keys | `tmux-bridge keys cc-review Enter` |
+| `tmux-bridge name <target> <label>` | Assign a pane label | `tmux-bridge name %3 cc-review` |
+| `tmux-bridge resolve <label>` | Resolve a label to a native pane target | `tmux-bridge resolve cc-review` |
 | `tmux-bridge id` | Print the current pane ID | `tmux-bridge id` |
 | `tmux-bridge doctor` | Check tmux, server, panes, and bridge state | `tmux-bridge doctor` |
 | `tmux-bridge version` | Print the executable version | `tmux-bridge version` |
@@ -97,13 +97,15 @@ Use either:
 - a native tmux target such as `shared:0.1` or `%3`;
 - a label previously assigned with `tmux-bridge name`.
 
-Labels make reply addresses easier to read:
+For panes just created by `with-agents`, assign their chosen names as labels:
 
 ```bash
-tmux-bridge name "$(tmux-bridge id)" coordinator
-tmux-bridge name %3 worker
-tmux-bridge resolve worker
+tmux-bridge name "$caller_target" cx-lead
+tmux-bridge name "$target" cc-review
+tmux-bridge resolve cc-review
 ```
+
+For every pane created by `with-agents`, use a unique label matching `^[a-z]{2}-[a-z]{1,6}$`. The two-letter prefix identifies the Agent CLI: use `cc` for Claude Code, `cx` for Codex, and `pi` for Pi. The suffix is one lowercase word of at most six letters. Do not rename a reused or pre-existing pane unless the user explicitly requests it.
 
 Read a resolved target before relying on its label. Labels remain discovery aids and may be stale after pane exit or reuse.
 
@@ -112,7 +114,7 @@ Read a resolved target before relying on its label. Labels remain discovery aids
 The bridge `type` command types exactly the supplied text. Frame Agent messages with a sender address:
 
 ```text
-[tmux-bridge from:coordinator] Please review src/auth.ts
+[tmux-bridge from:cx-lead] Please review src/auth.ts
 ```
 
 The address tells the receiving Agent where to reply. Do not invent a label or pane ID; derive it from `tmux-bridge id`, `tmux-bridge list`, or an explicit user target.
@@ -120,10 +122,10 @@ The address tells the receiving Agent where to reply. Do not invent a label or p
 When the caller runs inside tmux, `message` generates that frame automatically and adds a hint for the receiver to load `with-agents` before replying:
 
 ```bash
-tmux-bridge read worker 20
-tmux-bridge message worker 'Please review src/auth.ts'
-tmux-bridge read worker 20
-tmux-bridge keys worker Enter
+tmux-bridge read cc-review 20
+tmux-bridge message cc-review 'Please review src/auth.ts'
+tmux-bridge read cc-review 20
+tmux-bridge keys cc-review Enter
 ```
 
 Use the manual `type` form below when the caller is outside tmux or a different explicit sender address is required.
@@ -131,11 +133,11 @@ Use the manual `type` form below when the caller is outside tmux or a different 
 Send the framed request atomically:
 
 ```bash
-tmux-bridge read worker 20
-tmux-bridge type worker \
-  '[tmux-bridge from:coordinator] Please review src/auth.ts'
-tmux-bridge read worker 20
-tmux-bridge keys worker Enter
+tmux-bridge read cc-review 20
+tmux-bridge type cc-review \
+  '[tmux-bridge from:cx-lead] Please review src/auth.ts'
+tmux-bridge read cc-review 20
+tmux-bridge keys cc-review Enter
 ```
 
 ## Receiving and Replying
@@ -145,7 +147,7 @@ When a prompt contains `[tmux-bridge from:<sender>]`, send the response to `<sen
 ```bash
 tmux-bridge read <sender> 20
 tmux-bridge type <sender> \
-  '[tmux-bridge from:worker] Review complete; one issue remains.'
+  '[tmux-bridge from:cc-review] Review complete; one issue remains.'
 tmux-bridge read <sender> 20
 tmux-bridge keys <sender> Enter
 ```
@@ -165,45 +167,48 @@ Use this full sequence:
 Example:
 
 ```bash
-tmux-bridge read worker 20
-tmux-bridge type worker \
-  '[tmux-bridge from:coordinator] Run the focused tests and report failures.'
-tmux-bridge read worker 20
-tmux-bridge keys worker Enter
+tmux-bridge read cc-review 20
+tmux-bridge type cc-review \
+  '[tmux-bridge from:cx-lead] Run the focused tests and report failures.'
+tmux-bridge read cc-review 20
+tmux-bridge keys cc-review Enter
 ```
 
 For a non-Agent pane that requires a response:
 
 ```bash
-tmux-bridge read worker 10
-tmux-bridge type worker "y"
-tmux-bridge read worker 10
-tmux-bridge keys worker Enter
-tmux-bridge read worker 20
+tmux-bridge read cc-review 10
+tmux-bridge type cc-review "y"
+tmux-bridge read cc-review 10
+tmux-bridge keys cc-review Enter
+tmux-bridge read cc-review 20
 ```
 
 ## Agent-to-Agent Workflow
 
-Label the caller when it runs inside tmux:
+Keep the caller's existing address when it runs inside tmux:
 
 ```bash
-tmux-bridge name "$(tmux-bridge id)" coordinator
+caller="$(tmux-bridge id)"
+tmux-bridge list
 ```
+
+If the caller was created by `with-agents`, use the compliant label assigned at creation. Otherwise keep its native pane ID; do not rename a pre-existing caller merely to make the reply address prettier. The `message` command automatically uses the caller's current `@name` label when present and falls back to its pane ID.
 
 Discover and inspect the target:
 
 ```bash
 tmux-bridge list
-tmux-bridge read worker 20
+tmux-bridge read cc-review 20
 ```
 
 Send a request with a reply address:
 
 ```bash
-tmux-bridge type worker \
-  '[tmux-bridge from:coordinator] Continue the task and report any blocker.'
-tmux-bridge read worker 20
-tmux-bridge keys worker Enter
+tmux-bridge message cc-review \
+  'Continue the task and report any blocker.'
+tmux-bridge read cc-review 20
+tmux-bridge keys cc-review Enter
 ```
 
 If the receiving Agent is bridge-aware, let it reply into the caller pane. Otherwise capture its pane at moderate intervals. Do not busy-loop in either mode.

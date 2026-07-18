@@ -110,13 +110,25 @@ command -v -- "$agent_cli"
 "$agent_cli" --help
 ```
 
-在选定的会话中创建 shell 窗口并捕获其 pane ID：
+为本 Skill 创建的 pane 选择一个唯一名称：
+
+```bash
+agent_type="cc"
+name="review"
+[[ "$agent_type" =~ ^[a-z]{2}$ && "$name" =~ ^[a-z]{1,6}$ ]] || \
+  { echo "invalid pane name components" >&2; exit 1; }
+pane_name="${agent_type}-${name}"
+```
+
+Claude Code 使用 `cc`，Codex 使用 `cx`，Pi 使用 `pi`。其他 CLI 使用另一个由两个小写字母组成的代码。完整名称必须匹配 `^[a-z]{2}-[a-z]{1,6}$`，且不得与当前 tmux server 中其他已创建 pane 的标签重复。
+
+在选定的会话中创建一个使用 pane 名称的 shell 窗口，并捕获其 pane ID：
 
 ```bash
 target="$(
   tmux new-window -d -P -F '#{pane_id}' \
     -t "${session}:" \
-    -n "$window_name" \
+    -n "$pane_name" \
     -c "$working_directory"
 )"
 ```
@@ -133,13 +145,22 @@ target="$(
 
 `split-window` 需要一个已有的目标 pane。当调用方在 tmux 外部时，优先在选定的已有会话中使用 `new-window`。记录当前交互创建的 pane 和窗口，以便将清理范围限制在本次交互创建的资源。
 
+立即为创建的 pane 设置名称，以便发现和自动化：
+
+```bash
+tmux set-option -p -t "$target" @name "$pane_name"
+tmux select-pane -t "$target" -T "$pane_name"
+```
+
+当 target 是已有 window 中通过 split 创建的 pane 时，不要重命名已有 window。除非用户明确请求，否则不要重命名任何复用或预先存在的 pane 或 window。
+
 继续阅读 [tmux.md](tmux.md)，通过输入一个 `launch_command` 来启动 CLI；该命令只能由可执行文件以及本地 `--help` 确认的参数构成。
 
 ## 5. 验证环境
 
 ```bash
 tmux list-panes -a \
-  -F '#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{pane_current_command}\t#{pane_current_path}'
+  -F '#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{@name}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}'
 tmux capture-pane -p -J -t "$target" -S -50
 ```
 

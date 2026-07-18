@@ -51,7 +51,9 @@ When the existing Agent context remains relevant, continue the same CLI conversa
 
 ## Start an Agent CLI
 
-When no suitable pane exists, follow the selected control-interface reference to create a shell pane in the intended session and working directory. When the caller is already inside tmux and the user has not selected another session, create the new window or split in the caller's current session. This keeps panes reachable through ordinary mouse, window, or pane selection without requiring a session switch. An explicitly selected pane or session elsewhere takes precedence. When the caller is outside tmux, prefer a user-selected or suitable existing session and create a new session only when none is suitable. Capture a stable pane target and read it before sending input.
+When no suitable pane exists, follow the selected control-interface reference to create a shell pane in the intended session and working directory. Name every pane created by this Skill `<agent_type>-<name>`, where `agent_type` is exactly two lowercase letters and `name` is one lowercase word of no more than six letters. Use `cc` for Claude Code, `cx` for Codex, and `pi` for Pi; choose an equivalent two-letter code for another CLI. Keep the name unique within the tmux server. Do not rename a reused or pre-existing pane unless the user explicitly requests it.
+
+When the caller is already inside tmux and the user has not selected another session, create the new window or split in the caller's current session. This keeps panes reachable through ordinary mouse, window, or pane selection without requiring a session switch. An explicitly selected pane or session elsewhere takes precedence. When the caller is outside tmux, prefer a user-selected or suitable existing session and create a new session only when none is suitable. Capture a stable pane target and read it before sending input.
 
 Build the launch command from the executable and only arguments confirmed by local `--help`. Keep task text out of the shell launch command. Start the CLI through the same read, literal-input, confirm, and Enter sequence used for later messages.
 

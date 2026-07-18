@@ -110,13 +110,25 @@ command -v -- "$agent_cli"
 "$agent_cli" --help
 ```
 
-Create a shell window in the selected session and capture its pane ID:
+Choose a unique name for the pane created by this Skill:
+
+```bash
+agent_type="cc"
+name="review"
+[[ "$agent_type" =~ ^[a-z]{2}$ && "$name" =~ ^[a-z]{1,6}$ ]] || \
+  { echo "invalid pane name components" >&2; exit 1; }
+pane_name="${agent_type}-${name}"
+```
+
+Use `cc` for Claude Code, `cx` for Codex, and `pi` for Pi. Use another two-letter lowercase code for another CLI. The complete name must match `^[a-z]{2}-[a-z]{1,6}$` and must not duplicate another created-pane label in the current tmux server.
+
+Create a shell window with the pane name in the selected session and capture its pane ID:
 
 ```bash
 target="$(
   tmux new-window -d -P -F '#{pane_id}' \
     -t "${session}:" \
-    -n "$window_name" \
+    -n "$pane_name" \
     -c "$working_directory"
 )"
 ```
@@ -133,13 +145,22 @@ target="$(
 
 `split-window` requires an existing target pane. When the caller is outside tmux, prefer `new-window` in the selected existing session. Record the created pane and window so cleanup can be limited to resources created for the current interaction.
 
+Immediately name the created pane for discovery and automation:
+
+```bash
+tmux set-option -p -t "$target" @name "$pane_name"
+tmux select-pane -t "$target" -T "$pane_name"
+```
+
+Do not rename an existing window when the target was created as a split. Do not rename any reused or pre-existing pane or window unless the user explicitly requests it.
+
 Continue with [tmux.md](tmux.md) to start the CLI by entering a `launch_command` built only from the executable and arguments confirmed by local `--help`.
 
 ## 5. Verify the Environment
 
 ```bash
 tmux list-panes -a \
-  -F '#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{pane_current_command}\t#{pane_current_path}'
+  -F '#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{@name}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}'
 tmux capture-pane -p -J -t "$target" -S -50
 ```
 

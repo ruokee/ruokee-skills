@@ -54,6 +54,7 @@ experimential/with-agents/
 - 原生 tmux 是默认控制接口；在用户请求、现有流程已使用或读取保护与标签确有价值时，可使用已安装命令或 Skill 附带的 `tmux-bridge`。两个接口都保持读取、字面输入、确认和单独发送 Enter 的原子交互顺序。
 - 两个语言变体均附带可直接调用的 `scripts/tmux-bridge`；将其安装到 `PATH`、覆盖已有命令或修改 shell 配置前，必须分别取得用户的明确授权。
 - 创建新 pane 前先检查现有 pane；与当前对话有关、用户明确指定或已确认空闲时，优先尝试复用。需要全新上下文时，使用目标 CLI 已确认的清空或重置机制，不把清空终端画面当作清空对话。
+- 本 Skill 创建的 pane 使用 `<agent_type>-<name>` 命名：`agent_type` 是两个小写字母（如 Claude Code 使用 `cc`、Codex 使用 `cx`、Pi 使用 `pi`），`name` 是不超过 6 个小写字母的单个英文词；同一 tmux server 内避免重名。
 - 调用方已在 tmux 中时，新建 window 或 pane 默认放在当前 session，便于用户通过鼠标或普通 window/pane 切换直接访问；用户明确指定其他 session 或 pane 时，以指定目标为准。调用方不在 tmux 中时，优先复用合适的现有 session，确无合适目标再新建 session。
 - 当前交互创建的 pane 保留到外层用户任务或 goal 完全结束，并可用于后续对话、修改和审查；任务结束后再按需清理。预先存在的用户 pane 不自动关闭。
 
