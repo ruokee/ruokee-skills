@@ -9,11 +9,13 @@ Ruokee 的个人 Skills 工作仓库。
 ```text
 public/
 experimential/
+fork/
 third-party/
 ```
 
 - `public/`：自研且已经稳定到可以对外发布的 Skills。
 - `experimential/`：自研或改造中、尚未正式可用的 Skills。
+- `fork/`：基于外部 Skill 修改并由本仓库继续维护的分叉。
 - `third-party/`：外部引入的 Skills。通常只保留极简 Workspace，并在 `README.md` 中说明来源和选用原因。
 
 ## Workspace 结构

@@ -1,6 +1,7 @@
 .cache/
 .DS_Store
 .venv/
+.worktrees/
 __pycache__/
 node_modules/
 *.tmp
