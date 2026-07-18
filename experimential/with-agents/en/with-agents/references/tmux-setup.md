@@ -74,7 +74,7 @@ target="$(
 
 `split-window` requires an existing target pane. Default to `new-window` when the caller is outside tmux.
 
-Return to `SKILL.md` to start the CLI by entering a `launch_command` built only from the executable and arguments confirmed by local `--help`.
+Continue with [tmux.md](tmux.md) to start the CLI by entering a `launch_command` built only from the executable and arguments confirmed by local `--help`.
 
 ## 4. Verify the Environment
 
@@ -84,7 +84,7 @@ tmux list-panes -a \
 tmux capture-pane -p -J -t "$target" -S -50
 ```
 
-Confirm that the target shell is ready in the expected working directory, then return to the interaction workflow in `SKILL.md`.
+Confirm that the target shell is ready in the expected working directory, then continue with the interaction workflow in [tmux.md](tmux.md).
 
 ## 5. Hand Off for Manual Attachment
 

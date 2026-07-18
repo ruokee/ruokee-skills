@@ -74,7 +74,7 @@ target="$(
 
 `split-window` 需要一个已有的目标 pane。当调用方在 tmux 外部时，默认使用 `new-window`。
 
-返回 `SKILL.md`，通过输入仅包含可执行文件和本地 `--help` 确认的参数的 `launch_command` 来启动 CLI。
+继续阅读 [tmux.md](tmux.md)，通过输入一个仅由可执行文件和本地 `--help` 确认的参数构成的 `launch_command` 来启动 CLI。
 
 ## 4. 验证环境
 
@@ -84,7 +84,7 @@ tmux list-panes -a \
 tmux capture-pane -p -J -t "$target" -S -50
 ```
 
-确认目标 shell 已在预期的工作目录中就绪，然后返回 `SKILL.md` 中的交互工作流。
+确认目标 shell 已在预期的工作目录中就绪，然后继续阅读 [tmux.md](tmux.md) 中的交互工作流。
 
 ## 5. 移交手动连接
 

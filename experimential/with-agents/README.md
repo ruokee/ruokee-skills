@@ -15,14 +15,18 @@ experimential/with-agents/
 │       ├── agents/
 │       │   └── openai.yaml
 │       ├── references/
-│       │   └── tmux-setup.md
+│       │   ├── tmux-bridge.md
+│       │   ├── tmux-setup.md
+│       │   └── tmux.md
 │       └── SKILL.md
 ├── zh/
 │   └── with-agents/
 │       ├── agents/
 │       │   └── openai.yaml
 │       ├── references/
-│       │   └── tmux-setup.md
+│       │   ├── tmux-bridge.md
+│       │   ├── tmux-setup.md
+│       │   └── tmux.md
 │       └── SKILL.md
 └── README.md
 ```
@@ -43,12 +47,15 @@ experimential/with-agents/
 ## 运行时原则
 
 - Agent 仍在执行、等待或自动重试时持续保留其 pane，不以固定等待时长或重试次数作为退出条件。
+- 原生 tmux 是默认控制接口；仅在用户请求、现有流程已使用或本机确认安装时使用 `tmux-bridge`。两个接口都保持读取、字面输入、确认和单独发送 Enter 的原子交互顺序。
 - 创建新 pane 前先检查现有 pane；与当前对话有关、用户明确指定或已确认空闲时，优先尝试复用。需要全新上下文时，使用目标 CLI 已确认的清空或重置机制，不把清空终端画面当作清空对话。
 - 当前交互创建的 pane 保留到外层用户任务或 goal 完全结束，并可用于后续对话、修改和审查；任务结束后再按需清理。预先存在的用户 pane 不自动关闭。
 
 ## 参考项目
 
 交互流程主要参考 [ShawnPana/smux](https://github.com/ShawnPana/smux)，尤其是 pane 发现、发送前读取、字面文本与 Enter 分离、以及在消息中携带回复 pane 的做法。审阅基准为 [`70a6899`](https://github.com/ShawnPana/smux/tree/70a6899bdec5d3d3b51d9b927c0c0db0e22bb73f)，smux 使用 MIT License。本 Skill 不依赖 smux 安装器或个人 tmux 配置。
+
+`references/tmux-bridge.md` 基于 smux 同 revision 的 [原始参考文档](https://github.com/ShawnPana/smux/blob/70a6899bdec5d3d3b51d9b927c0c0db0e22bb73f/skills/smux/references/tmux-bridge.md) 引入并适配，保留原作者和完整 MIT License。适配内容将上游的直接回复假设纳入本 Skill 的持久等待与 pane 生命周期规则；`references/tmux.md` 则独立整理原生 tmux 的完整操作流程。
 
 其他用于确认设计边界的项目：
 
