@@ -1,0 +1,4 @@
+interface:
+  display_name: "With Agents"
+  short_description: "Coordinate external Agent CLIs through tmux"
+  default_prompt: "Use $with-agents to start and coordinate an external Agent CLI through tmux."
