@@ -22,7 +22,8 @@ third-party/frontend-design/
 ├── frontend-design/
 │   ├── LICENSE.txt
 │   └── SKILL.md
-└── README.md
+├── README.md
+└── upstream.toml
 ```
 
 当前保留原始 Skill 内容，未做本地改写。

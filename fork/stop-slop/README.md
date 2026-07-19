@@ -38,5 +38,6 @@ fork/stop-slop/
 │   │   └── structures.md
 │   ├── LICENSE.txt
 │   └── SKILL.md
-└── README.md
+├── README.md
+└── upstream.toml
 ```

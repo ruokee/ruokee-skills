@@ -1,0 +1,14 @@
+schema_version = 1
+
+[upstream]
+repository = "https://github.com/anthropics/skills"
+path = "skills/frontend-design"
+ref = "main"
+commit = "9d2f1ae187231d8199c64b5b762e1bdf2244733d"
+imported_at = "2026-07-02"
+updated_at = "2026-07-02"
+
+[update]
+mode = "replace"
+local_root = "frontend-design"
+managed_paths = ["SKILL.md"]
