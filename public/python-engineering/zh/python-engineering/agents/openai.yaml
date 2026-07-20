@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python Engineering"
+  short_description: "指导 Python 项目工程实践、规范设计、工具链配置与代码审查"
+  default_prompt: "使用 $python-engineering 审查 Python 项目结构、工程规范、工具链和代码。"

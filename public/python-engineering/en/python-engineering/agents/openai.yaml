@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python Engineering"
+  short_description: "Guide Python project engineering and reviews"
+  default_prompt: "Use $python-engineering to review Python project structure, conventions, tooling, and code."

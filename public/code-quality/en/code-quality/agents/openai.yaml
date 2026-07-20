@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Quality"
+  short_description: "Review code and test quality, design tradeoffs, and refactoring"
+  default_prompt: "Use $code-quality to review code and test quality, design tradeoffs, and refactoring opportunities."

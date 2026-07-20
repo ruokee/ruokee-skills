@@ -1,0 +1,4 @@
+interface:
+  display_name: "msgspec"
+  short_description: "使用 msgspec 构建高性能类型验证与序列化方案"
+  default_prompt: "使用 $msgspec 设计基于 msgspec 的高性能类型验证与序列化方案。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "msgspec"
+  short_description: "Build fast typed serialization with msgspec"
+  default_prompt: "Use $msgspec to design fast, type-safe validation and serialization with msgspec."

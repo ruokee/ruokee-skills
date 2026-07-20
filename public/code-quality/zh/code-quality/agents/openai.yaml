@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Quality"
+  short_description: "审查代码与测试质量、设计权衡以及重构机会"
+  default_prompt: "使用 $code-quality 审查代码与测试质量、设计权衡和重构机会。"
