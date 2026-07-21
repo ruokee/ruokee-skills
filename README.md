@@ -64,7 +64,9 @@ uv run scripts/install.py remove code-quality
 uv run scripts/install.py --root /path/to/project list
 ```
 
-默认执行项目级操作：项目根目录为当前工作目录，也可以通过 `--root <directory>` 指定，资源安装到 `<project>/.agents/skills`。只有显式指定 `--global` 才会使用全局目录；默认全局目标为 Codex 的 `~/.codex/skills`，可以用 `--target claude` 切换到 `~/.claude/skills`。`--global` 与 `--root` 不能同时使用。`list` 会同时显示仓库资源、可用变体及安装状态。`update` 先比较内容哈希，哈希一致的资源会直接跳过，发现变化后才列出并询问。
+默认执行项目级操作：项目根目录为当前工作目录，也可以通过 `--root <directory>` 指定，资源安装到 `<project>/.agents/skills`。只有显式指定 `--global` 才会使用全局目录；默认全局目标为 Codex 的 `~/.codex/skills`，可以用 `--target claude` 切换到 `~/.claude/skills`。`--global` 与 `--root` 不能同时使用。`list` 会同时显示仓库资源、可用变体及安装状态。
+
+首次安装未指定变体时，安装器依次选择 `default`、`en` 和发现顺序中的第一个可用变体，不读取系统 locale。更新已安装资源时继续使用当前变体。`update` 先比较内容哈希，哈希一致的资源会直接跳过，发现变化后才列出并询问。
 
 `update <resource> --variant <name>` 用于切换变体，`update <resource> --reinstall` 用于重装当前变体并恢复仓库版本；这两个显式操作互斥，并且必须指定资源。
 

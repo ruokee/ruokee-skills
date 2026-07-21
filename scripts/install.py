@@ -10,7 +10,6 @@
 
 import hashlib
 import json
-import locale
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -188,9 +187,10 @@ def choose_variant(resource: Resource, requested: str | None, installed: str | N
         return resource.variants[installed]  # type: ignore[index]
     if len(resource.variants) == 1:
         return next(iter(resource.variants.values()))
-    language = (locale.getlocale()[0] or os.environ.get("LANG", "")).lower()
-    preferred = "zh" if language.startswith("zh") else "en"
-    return resource.variants.get(preferred, next(iter(resource.variants.values())))
+    for preferred in ("default", "en"):
+        if preferred in resource.variants:
+            return resource.variants[preferred]
+    return next(iter(resource.variants.values()))
 
 
 def metadata_for(resource: Resource, variant: Variant, target: str, content_hash: str) -> dict[str, Any]:

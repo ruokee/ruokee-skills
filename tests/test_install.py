@@ -57,6 +57,19 @@ class InstallerTest(unittest.TestCase):
         self.assertEqual(set(resources["demo"].variants), {"en", "zh"})
         self.assertEqual(set(resources["plain"].variants), {"default"})
 
+    def test_choose_variant_ignores_locale_and_uses_deterministic_priority(self) -> None:
+        language_variants = self.make_skill()
+        with mock.patch.dict(installer.os.environ, {"LANG": "zh_CN.UTF-8"}):
+            self.assertEqual(installer.choose_variant(language_variants, None).name, "en")
+        self.assertEqual(installer.choose_variant(language_variants, None, "zh").name, "zh")
+        self.assertEqual(installer.choose_variant(language_variants, "zh").name, "zh")
+
+        direct = self.make_skill("direct", variants=("en", "default"))
+        self.assertEqual(installer.choose_variant(direct, None).name, "default")
+
+        custom = self.make_skill("custom", variants=("compact", "full"))
+        self.assertEqual(installer.choose_variant(custom, None).name, "compact")
+
     def test_hash_ignores_manager_metadata(self) -> None:
         directory = self.root / "content"
         directory.mkdir()
