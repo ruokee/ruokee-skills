@@ -1,0 +1,10 @@
+{
+  "name": "task",
+  "version": "0.1.0",
+  "description": "Persistent project Tasks for Codex, Claude Code, and Pi",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills"
+}

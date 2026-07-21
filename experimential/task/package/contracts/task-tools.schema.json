@@ -1,0 +1,362 @@
+{
+  "task_find": {
+    "title": "FindRequest",
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "default": ""
+      },
+      "branch": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "statuses": {
+        "type": "array",
+        "items": {
+          "enum": [
+            "closed",
+            "open",
+            "paused"
+          ],
+          "type": "string"
+        }
+      },
+      "include_archived": {
+        "type": "boolean",
+        "default": false
+      },
+      "limit": {
+        "type": "integer",
+        "default": 20
+      },
+      "cwd": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "task_read": {
+    "title": "ReadRequest",
+    "type": "object",
+    "properties": {
+      "task_ref": {
+        "type": "string"
+      },
+      "view": {
+        "enum": [
+          "detailed",
+          "metadata",
+          "summary"
+        ],
+        "default": "summary",
+        "type": "string"
+      },
+      "wal_max_length": {
+        "type": "integer"
+      },
+      "wal_max_entries": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "cwd": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "task_ref"
+    ],
+    "additionalProperties": false
+  },
+  "task_create": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "enum": [
+          "task",
+          "subtasks"
+        ]
+      },
+      "task": {
+        "title": "TaskItem",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "depends_on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "related_to": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "extra": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "user_confirmed": {
+        "type": "boolean",
+        "default": false
+      },
+      "actor": {
+        "type": "string"
+      },
+      "cwd": {
+        "type": "string"
+      },
+      "parent_ref": {
+        "type": "string"
+      },
+      "subtasks": {
+        "type": "array",
+        "items": {
+          "title": "TaskItem",
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "depends_on": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "related_to": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "extra": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "type"
+    ],
+    "additionalProperties": false
+  },
+  "task_update": {
+    "title": "UpdateRequest",
+    "type": "object",
+    "properties": {
+      "task_ref": {
+        "type": "string"
+      },
+      "patch": {
+        "title": "UpdatePatch",
+        "type": "object",
+        "properties": {
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "depends_on": {
+            "title": "RelationDelta",
+            "type": "object",
+            "properties": {
+              "add": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              },
+              "remove": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              }
+            },
+            "additionalProperties": false
+          },
+          "related_to": {
+            "title": "RelationDelta",
+            "type": "object",
+            "properties": {
+              "add": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              },
+              "remove": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              }
+            },
+            "additionalProperties": false
+          },
+          "extra": {
+            "title": "ExtraDelta",
+            "type": "object",
+            "properties": {
+              "set": {
+                "type": "object",
+                "default": {}
+              },
+              "remove": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              }
+            },
+            "additionalProperties": false
+          },
+          "transition": {
+            "title": "Transition",
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "closed",
+                  "open",
+                  "paused"
+                ],
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "force": {
+                "type": "boolean",
+                "default": false
+              }
+            },
+            "required": [
+              "status",
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          "archive": {
+            "title": "Archive",
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          "unarchive": {
+            "title": "Unarchive",
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string"
+              },
+              "user_confirmed": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "reason",
+              "user_confirmed"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "actor": {
+        "type": "string"
+      },
+      "cwd": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "task_ref",
+      "patch"
+    ],
+    "additionalProperties": false
+  },
+  "task_log": {
+    "title": "LogRequest",
+    "type": "object",
+    "properties": {
+      "task_ref": {
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      },
+      "extra_body": {
+        "type": "string"
+      },
+      "actor": {
+        "type": "string"
+      },
+      "cwd": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "task_ref",
+      "message"
+    ],
+    "additionalProperties": false
+  }
+}

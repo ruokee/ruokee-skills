@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "task": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "if [ -n \"$CODEX_PLUGIN_ROOT\" ]; then plugin_root=$CODEX_PLUGIN_ROOT; export TASK_HOST=codex; else plugin_root=$CLAUDE_PLUGIN_ROOT; export TASK_HOST=claude; fi; exec \"$plugin_root/bin/task-core\" mcp"
+      ]
+    }
+  }
+}

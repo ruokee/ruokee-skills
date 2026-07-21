@@ -1,0 +1,12 @@
+{
+  "name": "ruokee-skills",
+  "owner": {
+    "name": "Ruokee"
+  },
+  "plugins": [
+    {
+      "name": "task",
+      "source": "./experimential/task/package"
+    }
+  ]
+}

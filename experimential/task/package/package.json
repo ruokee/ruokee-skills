@@ -1,0 +1,18 @@
+{
+  "name": "@ruokee/task",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Persistent project Tasks for Codex, Claude Code, and Pi",
+  "keywords": ["pi-package", "agent-task", "task"],
+  "type": "module",
+  "pi": {
+    "extensions": ["./adapters/pi/task-tools.ts"],
+    "skills": ["./skills"]
+  },
+  "dependencies": {
+    "typebox": "^1.0.35"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.80.0"
+  }
+}

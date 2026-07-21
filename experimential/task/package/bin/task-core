@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+package_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+binary="$package_root/runtime/linux-x86_64/task-core.dist/task-core.bin"
+
+if [ ! -x "$binary" ]; then
+  echo "task-core runtime is missing; rebuild the Task package" >&2
+  exit 127
+fi
+
+exec "$binary" "$@"

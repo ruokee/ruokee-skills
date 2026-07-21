@@ -1,0 +1,25 @@
+{
+  "name": "task",
+  "version": "0.1.0",
+  "description": "Persistent project Tasks for Codex, Claude Code, and Pi",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Task",
+    "shortDescription": "Create, recover, and advance persistent project Tasks.",
+    "longDescription": "A deterministic file-backed Task system that keeps work state, relationships, lifecycle, and activity logs portable across agent hosts and sessions.",
+    "developerName": "Ruokee",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write", "Local tools"],
+    "defaultPrompt": [
+      "Find and resume an existing project Task.",
+      "Create a Task for this confirmed multi-session effort.",
+      "Record a durable decision in the current Task."
+    ]
+  }
+}
