@@ -1,40 +1,87 @@
 ---
 name: grill-me-plus
-description: Stress-test a plan, decision, or idea through dependency-aware rounds of three high-value questions. Use when the user explicitly invokes this skill or asks to be grilled, interviewed, or challenged before acting on a consequential choice.
+description: Systematically examine a plan, project, decision, or idea through dependency-aware, structured question rounds. Ask at most three independent material questions per round, continue for as many rounds as needed, and report decision progress until consequential matters are settled or safely deferred. Use only when the user explicitly invokes this skill or asks for a structured review before acting on a consequential choice.
 ---
 
 # Grill Me Plus
 
-Interview the user until both sides share enough understanding to act. Surface the user's decisions, evidence, assumptions, risks, and unresolved disagreements. Shared understanding does not require agreement with your recommendations.
+Build enough shared understanding to act. Examine the relevant dimensions of the subject, surface decisions, evidence, assumptions, risks, and unresolved disagreements, and keep agreement distinct from understanding.
 
-## Prepare
+Treat the review as a collaborative examination. Do not turn it into an adversarial exercise, an attempt to find as many flaws as possible, or a requirement that the user accept your recommendation.
 
-Map the goal, scope, constraints, and dependent decisions. Treat the **frontier** as decisions whose prerequisites are settled and that can be answered without guessing another open decision.
+## Build the Review Map
 
-Find available facts in the environment, existing material, or tools. Ask the user only about goals, preferences, trade-offs, authorization, and risk acceptance.
+Scan the relevant dimensions before following one branch deeply:
+
+- goal, intended outcome, and success or stop criteria;
+- problem evidence, users, and affected stakeholders;
+- scope, constraints, resources, and authorization;
+- alternatives and trade-offs;
+- assumptions, dependencies, and unknown facts;
+- execution, ownership, operations, and support boundaries;
+- risks, reversibility, and failure conditions.
+
+Apply only dimensions that can affect the current goal. Mark irrelevant dimensions as not applicable instead of inventing questions for them.
+
+Classify each material item as a fact, assumption, user decision, or risk. Map dependencies between items. Treat the **frontier** as material items whose prerequisites are settled and that can be addressed now without guessing another open answer.
+
+Find available facts in the environment, existing material, or tools. Ask the user only for user-owned information, goals, preferences, trade-offs, authorization, or risk acceptance that cannot reasonably be established otherwise.
+
+## Select Material Questions
+
+Treat a candidate as material only when all of the following hold:
+
+- plausible answers would materially change the conclusion, next action, scope, resource commitment, risk acceptance, or go/no-go decision;
+- the answer is not already established by available evidence and requires user-owned information or judgment;
+- the item cannot be safely defaulted or deferred within the current decision horizon;
+- the item is not already answered and does not depend on another open question in the same round.
+
+If a candidate fails this test, resolve it from evidence, record a safe default, defer it, or omit it. Never ask merely because a detail is interesting, might matter someday, or can be framed as a risk.
+
+After filtering, rank material candidates by how much they can change direction or eliminate branches, the cost and reversibility of a wrong choice, how much downstream work they unblock, and their uncertainty or time sensitivity.
 
 ## Ask in Rounds
 
-Ask three independent, high-value frontier questions per round. Ask fewer only when dependencies leave fewer than three answerable questions. Prioritize decisions that change direction, have high costs, are hard to reverse, or unblock downstream work.
+Ask one to three independent material questions per round. Three is a hard per-round maximum, not a target and not a limit on the number of rounds. Never add lower-impact questions to fill a round. Continue for as many rounds as the review requires.
 
-Number each question and include:
+Make each numbered item exactly one user decision. Context, recommendations, options, and supporting bullets must not contain additional questions. Keep dependent decisions for later rounds.
 
-- why the decision matters now;
-- your recommended answer and reason;
-- concrete options when useful.
+For each question, include:
+
+- what decision is needed and what would materially change with the answer;
+- your recommended answer and reason when evidence supports one, or state that no recommendation is justified yet;
+- concrete options when they make the decision easier to answer.
 
 Make the round easy to answer by number, such as `1A, 2 agree, 3 defer`. Wait for the response before asking questions unlocked by it.
 
-If the user follows up, challenges a recommendation, expresses doubt, or explores the current issue in more depth, pause the interview queue and resolve that discussion first. Ask only questions needed to clarify it. Then incorporate its conclusions, recompute the full frontier, and resume batches of three whenever three independent questions are available. Do not treat the discussion as answers to other open questions.
+If the user follows up, challenges a recommendation, expresses doubt, or explores the current issue in more depth, pause the queued round and resolve that discussion first. Ask only what the current discussion needs. Then incorporate its conclusions, recompute the full review map and frontier, and resume rounds without treating the discussion as answers to unrelated items.
 
-Group low-risk, reversible decisions with obvious defaults into one confirmation block. Keep high-impact decisions separate.
+State low-risk, reversible defaults without turning each one into a separate question. Ask for one grouped confirmation only when accepting the group is itself material. Never hide a material decision in a default block.
 
-## Update and Finish
+## Update and Report Progress
 
-After each response, update the decision tree and frontier. If an upstream decision changes, identify which earlier conclusions no longer hold.
+After every user response, update the review map and frontier. If an upstream answer changes, identify which earlier conclusions no longer hold.
 
-Summarize after three rounds, a major branch, an invalidated conclusion, or when no high-value questions remain. Include confirmed decisions, evidence and assumptions, open questions, and the next step.
+Classify each current material item as settled, an open decision, or pending evidence. Count an item as settled when it is confirmed or when a safe default or deferral cannot block the current goal.
 
-Finish when the goal, scope, constraints, and consequential decisions are clear and the remaining questions can be deferred or handled with safe defaults. Present a final summary and ask whether it is sufficient for action.
+Before the next round, report visible progress without waiting for the user to ask:
 
-Do not implement the plan or take side-effecting actions before that confirmation unless the user asks to decide and act in parallel. Let the user skip, accept, defer, revisit, or end the interview at any time.
+`Decision progress: about N% (X of Y current material items settled; A open decisions; B pending evidence).`
+
+Calculate `N` as settled material items divided by all currently identified material items and round to the nearest 5%. Treat it as an estimate over the current map; if a new material branch appears, explain that the percentage can decrease.
+
+After every three completed rounds, or after a major branch is completed or invalidated, provide a checkpoint with confirmed decisions, evidence and assumptions, deferred and open items, invalidated conclusions, and the next frontier. A checkpoint is not a stop condition. Unless the finish criteria are met or the user pauses, include the next round after the checkpoint in the same response.
+
+## Finish
+
+Before finishing, verify that:
+
+- every relevant review dimension has been examined;
+- no open material item could change the recommendation, next action, scope, resource commitment, risk acceptance, or go/no-go decision;
+- no pending fact is being treated silently as an assumption.
+
+Do not finish merely because three rounds have passed or a checkpoint was produced. Omit or safely defer low-level implementation details instead of promoting them into material questions.
+
+Finish when the consequential matters are settled or safely deferred and both sides have enough shared understanding to act. Present a final summary with decision progress, confirmed decisions, evidence and assumptions, accepted risks, deferred or open items, and the next step. Ask whether the result is sufficient for action.
+
+Let the user skip, accept, defer, revisit, or end the review at any time. If the user ends early, respect that choice and still report the current progress and remaining blockers. Do not implement the plan or take side-effecting actions before final confirmation unless the user asks to decide and act in parallel.
