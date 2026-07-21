@@ -1,0 +1,6 @@
+interface:
+  display_name: "Grill Me Plus"
+  short_description: "Stress-test decisions in focused question rounds"
+  default_prompt: "Use $grill-me-plus to stress-test this plan in focused rounds before taking action."
+policy:
+  allow_implicit_invocation: false
