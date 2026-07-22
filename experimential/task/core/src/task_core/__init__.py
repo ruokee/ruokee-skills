@@ -2,6 +2,6 @@
 
 from typing import Final
 
-VERSION: Final = "0.1.0"
+VERSION: Final = "0.1.1"
 PROTOCOL_VERSION: Final = "1"
 SCHEMA_VERSION: Final = "2026-07-21"
