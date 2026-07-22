@@ -1,6 +1,6 @@
 interface:
   display_name: "Grill Me Plus"
-  short_description: "在聚焦的问答轮次中系统审视计划、项目、决策或想法，每轮最多提出三个独立问题"
+  short_description: "通过系统化的方法对计划、项目、决策与想法进行审视。"
   default_prompt: "在行动前使用 $grill-me-plus 通过聚焦的问题轮次系统审视当前的计划、项目、决策或想法。"
 policy:
   allow_implicit_invocation: false
