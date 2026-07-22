@@ -54,3 +54,7 @@ Runtime assignment is contextual, not stored:
 - This boundary applies to Task data, not normal project work files.
 
 Before ending with unfinished work, append one concise WAL entry covering what changed, current blockers or decisions, and the next useful step. Create a normal handoff/checkpoint file only when the detail does not fit a useful WAL entry.
+
+## References
+
+- [Migration guide](references/migrate-from-trellis.md)
