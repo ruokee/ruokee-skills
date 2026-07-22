@@ -41,6 +41,7 @@ def test_embedded_init_ignore_and_strict_creation(project: Path, monkeypatch: py
     assert metadata["created_at"] == "2026-07-22T14:15:16.987+08:00"
     assert UUID(metadata["id"]).int >> 80 == int(datetime.fromisoformat(metadata["created_at"]).timestamp() * 1000)
     assert (task_dir / "wal").is_dir()
+    assert not (task_dir / "subtasks").exists()
     wal = (task_dir / "wal/2026-07-22.md").read_text()
     assert "## 2026-07-22T14:15:16.987+08:00 · codex:test" in wal
 
@@ -265,6 +266,54 @@ def test_subtasks_can_preserve_individual_created_at_values(
         wal_files = list((task_dir / "wal").iterdir())
         assert [path.name for path in wal_files] == ["2026-07-22.md"]
         assert "## 2026-07-22T14:15:16.987+08:00 · codex:test" in wal_files[0].read_text()
+
+
+def test_subtasks_directory_is_created_lazily(project: Path) -> None:
+    parent = create_task(project, "Parent without children")
+    parent_dir = Path(str(parent["task_dir"]))
+    assert not (parent_dir / "subtasks").exists()
+
+    child = task_create(
+        {
+            "type": "subtasks",
+            "parent_ref": parent["id"],
+            "subtasks": [{"name": "First child"}],
+        },
+        cwd=str(project),
+    )["data"]["created"][0]
+    child_dir = Path(str(child["task_dir"]))
+    assert child_dir.parent == parent_dir / "subtasks"
+    assert not (child_dir / "subtasks").exists()
+
+    grandchild = task_create(
+        {
+            "type": "subtasks",
+            "parent_ref": child["id"],
+            "subtasks": [{"name": "First grandchild"}],
+        },
+        cwd=str(project),
+    )["data"]["created"][0]
+    assert Path(str(grandchild["task_dir"])).parent == child_dir / "subtasks"
+
+
+def test_failed_subtask_creation_removes_new_empty_partition(project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    parent = create_task(project, "Parent with failed child")
+    parent_dir = Path(str(parent["task_dir"]))
+
+    def fail_write(path: Path, data: bytes) -> None:
+        raise OSError("simulated write failure")
+
+    monkeypatch.setattr("task_core.service.atomic_write", fail_write)
+    with pytest.raises(OSError, match="simulated write failure"):
+        task_create(
+            {
+                "type": "subtasks",
+                "parent_ref": parent["id"],
+                "subtasks": [{"name": "Failed child"}],
+            },
+            cwd=str(project),
+        )
+    assert not (parent_dir / "subtasks").exists()
 
 
 def test_subtasks_relations_and_lifecycle(project: Path) -> None:

@@ -7,6 +7,12 @@ description: Manage persistent project Tasks across Codex, Claude Code, and Pi. 
 
 Use the five Task tools for durable project state. Treat Task files as user-owned state and the deterministic Core as the authority for managed metadata, relations, lifecycle, discovery, locks, and WAL appends.
 
+## Invocation
+
+Use the Task tools exposed by the current host as the primary interface. In Codex and Claude Code, prefer the registered MCP tools; in Pi, use the native Task tools. Do not shell out to `task-core invoke` when an equivalent host tool is available and working.
+
+Use the CLI only as a fallback when the equivalent host tool is unavailable or broken, or for management commands that have no Task tool: `init`, `check`, `rename`, and `version`. State the reason before falling back for one of the five ordinary operations.
+
 ## Resolve a Task
 
 Start every new session unbound. Do not infer a persistent current Task from the previous session.

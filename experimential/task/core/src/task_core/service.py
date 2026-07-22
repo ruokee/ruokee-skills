@@ -7,6 +7,7 @@ import stat
 import subprocess
 import tempfile
 from collections.abc import Iterable
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -485,6 +486,7 @@ def task_create(request: dict[str, Any], *, cwd: str | None = None) -> dict[str,
             parent = parent_record.task_dir
         for document in documents:
             _validate_initial_relations(context, document)
+        partition_created = not top_level and not os.path.lexists(parent / "subtasks")
         partition = _task_partition(parent, top_level=top_level, date=created_times[0])
         slots = _next_slots(partition, len(documents), top_level=top_level)
         targets = [
@@ -493,14 +495,15 @@ def task_create(request: dict[str, Any], *, cwd: str | None = None) -> dict[str,
         ]
         if any(os.path.lexists(path) for path in targets):
             raise TaskError("directory_exists", "目标 Task 目录已经存在")
-        staging = Path(tempfile.mkdtemp(prefix=".task-create-", dir=partition))
+        staging: Path | None = None
+        committed = False
         try:
+            staging = Path(tempfile.mkdtemp(prefix=".task-create-", dir=partition))
             staged: list[Path] = []
             for target, document in zip(targets, documents, strict=True):
                 current = staging / target.name
                 current.mkdir()
                 (current / "wal").mkdir()
-                (current / "subtasks").mkdir()
                 atomic_write(current / "TASK.md", dump_task_document(document))
                 wal_path = current / "wal" / f"{recorded_at:%Y-%m-%d}.md"
                 atomic_write(
@@ -510,8 +513,13 @@ def task_create(request: dict[str, Any], *, cwd: str | None = None) -> dict[str,
                 staged.append(current)
             for current, target in zip(staged, targets, strict=True):
                 os.replace(current, target)
+            committed = True
         finally:
-            shutil.rmtree(staging, ignore_errors=True)
+            if staging is not None:
+                shutil.rmtree(staging, ignore_errors=True)
+            if partition_created and not committed:
+                with suppress(OSError):
+                    partition.rmdir()
         created_records = [load_record(path) for path in targets]
         if parent_record is not None:
             try:
