@@ -1,0 +1,7 @@
+schema_version = 1
+resource_type = "skill"
+
+[variants]
+layout_version = 2
+default = "en"
+base = "skills/with-agents"

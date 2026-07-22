@@ -3,10 +3,15 @@
   "owner": {
     "name": "Ruokee"
   },
+  "description": "Local plugins maintained in the ruokee-skills repository.",
   "plugins": [
     {
       "name": "task",
       "source": "./experimential/task/package"
+    },
+    {
+      "name": "with-agents",
+      "source": "./experimential/with-agents"
     }
   ]
 }

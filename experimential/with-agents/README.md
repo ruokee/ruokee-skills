@@ -2,71 +2,90 @@
 
 ## 用途
 
-`with-agents` 用于在用户明确指定外部 Agent CLI、已有 Agent pane、tmux 交互或本 Skill 时，教会当前 Agent 如何发现、启动、读取和操作其他 Agent CLI。
+`with-agents` 教会当前 Agent 如何发现、启动、读取和操作外部 Agent CLI，适用于用户明确指定外部 CLI、已有 Agent pane、tmux 交互或需要持久保留的外部 Agent 工作。
 
-它把 Agent CLI 当作普通交互式终端程序，只使用 tmux 作为中间层。当前 harness 已提供原生 subagents 时，普通委派优先使用原生能力；用户明确指定外部 CLI、tmux 或本 Skill 时例外。
+它将外部 Agent CLI 作为普通交互式终端程序，只使用 tmux 作为中间层。当前 harness 的原生 subagent 能完成普通委派时优先使用原生能力；仅当用户明确指定外部 CLI、tmux 或本 Skill 时才使用本模块。
 
-## 语言变体
+## 树结构
 
 ```text
 experimential/with-agents/
-├── en/
-│   └── with-agents/
-│       ├── agents/
-│       │   └── openai.yaml
-│       ├── references/
-│       │   ├── tmux-bridge.md
-│       │   ├── tmux-setup.md
-│       │   └── tmux.md
-│       ├── scripts/
-│       │   └── tmux-bridge
-│       └── SKILL.md
-├── zh/
-│   └── with-agents/
-│       ├── agents/
-│       │   └── openai.yaml
-│       ├── references/
-│       │   ├── tmux-bridge.md
-│       │   ├── tmux-setup.md
-│       │   └── tmux.md
-│       ├── scripts/
-│       │   └── tmux-bridge
-│       └── SKILL.md
+├── .codex-plugin/plugin.json
+├── .claude-plugin/plugin.json
+├── meta.toml                  # 安装器 meta-v2 入口
+├── skills/with-agents/        # 完整英文 base，也是唯一规范 Skill 源
+│   ├── agents/openai.yaml
+│   ├── references/           # CLI、preset、消息、状态、pane、adapter 与 tmux 恢复
+│   ├── scripts/
+│   │   ├── launch-agent      # with-agents launch 的薄 shortcut
+│   │   └── with-agents       # 统一控制器（正常操作入口）
+│   └── SKILL.md
+├── variants/zh/               # 相对 Skill 根的稀疏中文 overlay
+│   ├── agents/openai.yaml
+│   ├── references/
+│   └── SKILL.md
+├── tests/
+│   ├── fixtures/
+│   │   └── mock_agent.py
+│   └── test_with_agents.py
 └── README.md
 ```
 
-`en/with-agents/` 是英文源版本；`zh/with-agents/` 从英文版本翻译并保持行为一致。安装时选择其中一个同名 Skill 变体。
+## 语言变体
+
+- `skills/with-agents/` 是完整英文 base，所有命令行行为和语义以它为准。
+- `variants/zh/` 只保存可翻译文件；安装器将它覆盖到英文 base 上，物化完整中文 Skill。
+- `scripts/with-agents` 和 `scripts/launch-agent` 只在英文 base 中保留一份，中文变体直接继承，因此两种物化结果的可执行文件逐字节一致。
+- 私有 preset 位于用户配置目录 `${XDG_CONFIG_HOME:-~/.config}/with-agents/presets/` 中，**不在本仓库内**。
+- Agent 类型注册表位于 `${XDG_CONFIG_HOME:-~/.config}/with-agents/config.json`；它只影响需要 registry 的命名与 generic callback 能力，不替代代码内置的 Codex/Pi capability adapter。
+
+## 安装路径
+
+Marketplace plugin 与仓库安装器是两条互斥的分发路径；同一宿主不要同时安装两份 `with-agents`。
+
+Codex 和 Claude marketplace 只暴露默认英文 Skill：
+
+```bash
+# 在 Codex/Claude 中先注册本仓库 marketplace，再选择 with-agents 安装。
+codex plugin marketplace add /path/to/ruokee-skills
+codex plugin add with-agents@ruokee-skills
+
+claude plugin marketplace add /path/to/ruokee-skills
+claude plugin install with-agents@ruokee-skills
+```
+
+中文或显式选择英文时，从仓库根目录使用安装器：
+
+```bash
+uv run --script scripts/install.py install with-agents --variant en --global --target codex
+uv run --script scripts/install.py install with-agents --variant zh --global --target codex
+```
+
+将 `--target codex` 改为 `--target claude` 可安装到 Claude 的全局 Skill 目录。Plugin 安装使用宿主 cache，不是源码 live mount；源码更新后需要按宿主的重装流程刷新。
+
+## 操作方式
+
+所有正常操作通过统一的 `scripts/with-agents` 控制器完成。`scripts/launch-agent` 是 `with-agents launch` 的薄 shortcut，接受相同选项。
+
+`send` 只提交消息，不创建 ticket；`request` 创建 v2 异步 event stream，允许 child 追加 `progress`、`question`，并以 `done`、`blocked` 或 `failed` 封口。request 提交后 caller 应释放 turn，以 spool 中按 `seq` 排序的事件为权威结果，不用 `read`、`wait` 或 `inbox` 建立轮询循环。
+
+控制器统一管理 pane 生命周期、观察凭据、event 持久化和尽力 callback；不使用过时的 `tmux-bridge`、`tmux-setup` 或拷贝自 smux 的脚本。原生 tmux 仅作为故障恢复入口——仅在控制器不可用、`doctor` 报告后端问题或需要手工恢复部分输入时，才参考 `references/tmux-recovery.md`。
 
 ## 撰写与设计边界
 
-以下内容约束本 Skill 的撰写和维护范围，不作为运行时操作说明写入可安装的 `SKILL.md`：
+以下内容约束本 Skill 的撰写和维护范围，不写入可安装的 `SKILL.md`：
 
 - 不预设 Agent 的固定角色、层级或任务类型；这些由当次请求决定。
-- 不要求安装额外 broker、daemon 或 MCP server，也不增加数据库、消息队列、结果 schema 或持久化状态。
-- 不为了使用本 Skill 引入 worktree 或固定 Agent 拓扑。
-- 不在 Skill 中介绍、比较或限制具体 Agent CLI。
+- 不要求安装额外 broker、daemon 或 MCP server，也不定义通用的结果协议或跨任务编排状态。
 - 不覆盖当前 harness、用户或目标 CLI 已有的配置和权限。
 - 不把 tmux session 或 pane 描述为 sandbox；tmux 只是终端中间层。
-
-## 运行时原则
-
 - Agent 仍在执行、等待或自动重试时持续保留其 pane，不以固定等待时长或重试次数作为退出条件。
-- 原生 tmux 是默认控制接口；在用户请求、现有流程已使用或读取保护与标签确有价值时，可使用已安装命令或 Skill 附带的 `tmux-bridge`。两个接口都保持读取、字面输入、确认和单独发送 Enter 的原子交互顺序。
-- 两个语言变体均附带可直接调用的 `scripts/tmux-bridge`；将其安装到 `PATH`、覆盖已有命令或修改 shell 配置前，必须分别取得用户的明确授权。
-- 创建新 pane 前先检查现有 pane；与当前对话有关、用户明确指定或已确认空闲时，优先尝试复用。需要全新上下文时，使用目标 CLI 已确认的清空或重置机制，不把清空终端画面当作清空对话。
-- 本 Skill 创建的 pane 使用 `<agent_type>-<name>` 命名：`agent_type` 是两个小写字母（如 Claude Code 使用 `cc`、Codex 使用 `cx`、Pi 使用 `pi`），`name` 是不超过 6 个小写字母的单个英文词；同一 tmux server 内避免重名。
-- 调用方已在 tmux 中时，新建 window 或 pane 默认放在当前 session，便于用户通过鼠标或普通 window/pane 切换直接访问；用户明确指定其他 session 或 pane 时，以指定目标为准。调用方不在 tmux 中时，优先复用合适的现有 session，确无合适目标再新建 session。
-- 当前交互创建的 pane 保留到外层用户任务或 goal 完全结束，并可用于后续对话、修改和审查；任务结束后再按需清理。预先存在的用户 pane 不自动关闭。
+- 创建的 pane 保留到外层任务或 goal 完全结束；预先存在的用户 pane 不自动关闭。
 
-## 参考项目
+## 运行测试
 
-交互流程主要参考 [ShawnPana/smux](https://github.com/ShawnPana/smux)，尤其是 pane 发现、发送前读取、字面文本与 Enter 分离、以及在消息中携带回复 pane 的做法。审阅基准为 [`70a6899`](https://github.com/ShawnPana/smux/tree/70a6899bdec5d3d3b51d9b927c0c0db0e22bb73f)，smux 使用 MIT License。本 Skill 不依赖 smux 安装器或个人 tmux 配置。
+```bash
+python -B -m unittest discover -s experimential/with-agents/tests
+```
 
-`references/tmux-bridge.md` 基于 smux 同 revision 的 [原始参考文档](https://github.com/ShawnPana/smux/blob/70a6899bdec5d3d3b51d9b927c0c0db0e22bb73f/skills/smux/references/tmux-bridge.md) 引入并适配，保留原作者和完整 MIT License。附带的 `scripts/tmux-bridge` 来自同 revision 的[上游脚本](https://github.com/ShawnPana/smux/blob/70a6899bdec5d3d3b51d9b927c0c0db0e22bb73f/scripts/tmux-bridge)，本地调整了消息提示、read guard 的 pane 身份校验、行数参数校验和空标签统计，并在脚本中保留完整 MIT License。参考文档还将上游的直接回复假设纳入本 Skill 的持久等待与 pane 生命周期规则；`references/tmux.md` 则独立整理原生 tmux 的完整操作流程。
-
-其他用于确认设计边界的项目：
-
-- [Claude Squad](https://github.com/smtg-ai/claude-squad)：将任意 Agent 视为 tmux 中可启动的终端命令。
-- [CLI Agent Orchestrator](https://github.com/awslabs/cli-agent-orchestrator)：保留原生 CLI/PTY 与人工 attach，但其 MCP 和编排层不进入本 Skill。
-- [claude-tmux-orchestration](https://github.com/primeline-ai/claude-tmux-orchestration)：补充多行文本的 buffer/paste 交互方式。
-- [Agent Deck](https://github.com/asheshgoplani/agent-deck) 与 [dmux](https://github.com/standardagents/dmux)：用于对比通用 CLI 承载与完整编排产品的边界。
+测试验证 meta-v2 物化、preset 与 Agent config、v1/v2 request 共存、event 顺序与资源预算、pane 身份变更、callback adapter 和共享脚本等核心合同。

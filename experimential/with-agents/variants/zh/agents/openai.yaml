@@ -1,0 +1,4 @@
+interface:
+  display_name: "With Agents"
+  short_description: "通过低自由度 tmux 控制器协调外部 Agent CLI"
+  default_prompt: "使用 $with-agents 通过 tmux 启动、观察并收发外部 Agent CLI 的消息。"

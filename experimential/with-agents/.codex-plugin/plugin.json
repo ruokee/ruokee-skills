@@ -1,0 +1,27 @@
+{
+  "name": "with-agents",
+  "version": "0.2.0+codex.20260722165823",
+  "description": "Operate external Agent CLIs through a deterministic tmux controller",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "With Agents",
+    "shortDescription": "Run and message external Agent CLIs in persistent panes.",
+    "longDescription": "Launch exact external Agent CLI commands, exchange atomic messages, and manage persistent tmux-backed pane lifecycles without replacing native subagents.",
+    "developerName": "Ruokee",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Local tools"
+    ],
+    "defaultPrompt": [
+      "Launch Codex in a persistent pane and send it this task.",
+      "Use Pi to work on this task and keep its pane available.",
+      "Inspect this existing Agent pane and continue the conversation."
+    ]
+  }
+}
