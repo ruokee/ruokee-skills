@@ -63,4 +63,12 @@ Before ending with unfinished work, append one concise WAL entry covering what c
 
 ## References
 
-- [Migration guide](references/migrate-from-trellis.md)
+Load only the reference needed for the current situation. Each reference is complete for its topic; routine operations should remain possible from this file alone.
+
+- Read [Project setup](references/project-setup.md) before init, after `project_not_initialized`, or when storage, root, registry, configuration, or Git policy is unclear.
+- Read [Task concepts](references/task-concepts.md) for nontrivial creation, `TASK.md` boundaries, hierarchy, relations, lifecycle, archive, or manual path changes.
+- Read [Context](references/context.md) when resuming, resolving ambiguity, choosing read views, handling handoff/compaction, or assigning Task work to another Agent.
+- Read [WAL](references/wal.md) when deciding what to record, reading longer history, correcting activity, or handling WAL warnings and committed state.
+- Read [Diagnostics and repair](references/diagnostics-and-repair.md) before changing damaged or ambiguous Task data, and when check, validation, race, staging, or filesystem errors occur.
+- Read [Rename](references/rename.md) before every Task rename.
+- Read [Trellis migration](references/migrate-from-trellis.md) before migrating any `.trellis` Task state.

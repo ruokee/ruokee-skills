@@ -7,9 +7,12 @@
 ```text
 task/
 ├── core/       # uv packaged application、CLI、MCP 与测试
+├── design/     # 当前规范设计与验证范围
 ├── package/    # 三个宿主共同安装的自包含 package root
 └── scripts/    # contract 生成与 Nuitka package 构建
 ```
+
+当前设计权威和维护入口见 [`design/`](design/README.md)。runtime Agent 的高频规则位于 `package/skills/task/SKILL.md`，完整操作说明按需放在其 `references/` 中。
 
 开发检查：
 
