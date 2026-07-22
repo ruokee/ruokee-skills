@@ -34,6 +34,7 @@ Use these mappings:
 | `title` | `name` | Prefer the human title. Shorten it if it exceeds Task's 40-column or 96-byte limit, and preserve the full title in the body. |
 | `description`, `prd.md` | `TASK.md` body or linked material | Keep the body as current truth. Preserve a substantial PRD as `prd.md` and link it from the body instead of duplicating it. |
 | `branch` | `branch` | Omit null or stale branches. |
+| reliable original creation or start time | create-item `created_at` | Pass a timezone-aware RFC 3339 timestamp only when the source evidence identifies the original instant reliably. A dated directory or date-only value is not enough to invent a time or timezone. |
 | `parent` / `children` | parent and subtasks | Recreate hierarchy by creating parents before children. Do not encode hierarchy as `related_to`. |
 | `planning`, `in_progress` | `open` | Use `paused` only when the source evidence says work was deliberately paused. |
 | `completed` | `closed` | Close after descendants have been created and closed. |
@@ -51,14 +52,13 @@ Treat Trellis IDs and directory names as legacy references, not Task IDs. Store 
     "migration": {
       "source": ".trellis/tasks/06-16-example",
       "source_id": "example",
-      "source_status": "in_progress",
-      "source_created_at": "2026-06-16"
+      "source_status": "in_progress"
     }
   }
 }
 ```
 
-Task Core assigns a new UUIDv7 and `created_at`. Preserve the source creation time under `extra.migration`; do not overwrite the managed timestamp.
+Task Core always assigns a new UUIDv7. When a create item includes `created_at`, Core normalizes it to millisecond precision for the managed `created_at`, encodes the same instant in the UUIDv7, and uses the calendar date expressed in that timestamp's offset for a top-level Task's `<task_root>/YYYY-MM/DD` partition. The initial WAL still records the actual migration time. Omit `created_at` when the original instant or timezone is uncertain; ordinary creation then keeps using the actual creation time for all four values. Do not duplicate a supplied timestamp under `extra.migration`.
 
 Resolve hierarchy from both sides. Trellis `parent` and `children` values may use an ID, a dated directory name, or an inconsistent legacy prefix. Build one source-directory-to-destination-ID map and report unresolved or contradictory edges instead of guessing. Do not infer `depends_on` or `related_to` from task order, nearby dates, branches, or prose.
 
@@ -81,12 +81,12 @@ For a large migration, prefer a script for deterministic batch processing, then 
    - Run `task-core init --mode embedded --git-policy ignore` for local-only `.task/` state.
 3. Do not silently accept the default policy during a migration. If the user instead wants detached storage or a custom `task_root`, stop using this `.task/` guide and plan that layout explicitly.
 4. Inventory source Tasks, material sizes and symlinks; classify target status, archive state and material treatment; then resolve the complete parent-child graph.
-5. Create all top-level Tasks with `task_create`. The user's explicit migration approval satisfies strict creation confirmation; pass `user_confirmed: true` only on that basis.
-6. Create children with `task_create` using `type: "subtasks"` and the destination parent reference. Process the hierarchy from roots toward leaves. Batch siblings when they can be created atomically.
+5. Create all top-level Tasks with `task_create`. Put each reliably resolved original timestamp in that Task item's `created_at`; leave the field absent rather than synthesizing missing precision or timezone. The user's explicit migration approval satisfies strict creation confirmation; pass `user_confirmed: true` only on that basis.
+6. Create children with `task_create` using `type: "subtasks"` and the destination parent reference. Apply the same per-item `created_at` rule to subtasks. Process the hierarchy from roots toward leaves. Batch siblings when they can be created atomically, even when their original timestamps differ.
 7. Record the returned `task_dir` and UUID for every source directory. Use only this map for later relations, lifecycle changes, file copies, and verification.
 8. Copy the selected task-owned materials into each returned `task_dir` without changing the source and without dereferencing symlinks. Rename legacy `task.json` to `trellis-task.json` if preserving it; this distinguishes provenance from live Task state. Do not blindly recurse through a source directory.
 9. Write or refine the `TASK.md` body with host file tools while leaving its YAML frontmatter unchanged. Link the preserved materials that a future Agent should read first.
-10. Append one concise migration WAL entry with `task_log`. Include the source path, original status, migrated material summary, and any information intentionally not mapped. Do not replay `implement.jsonl` or `check.jsonl` entry by entry.
+10. Append one concise migration WAL entry with `task_log`. Include the source path, original status, migrated material summary, and any information intentionally not mapped. Both the automatic creation entry and this entry use the actual migration time even when `created_at` preserves an earlier instant. Do not replay `implement.jsonl` or `check.jsonl` entry by entry.
 11. Recreate only explicit non-hierarchical relations with `task_update`, using destination UUIDs. Report relations whose targets were not migrated.
 12. Apply terminal states from leaves toward roots with `task_update` transitions. Supply a reason such as `Migrated from completed Trellis task`. If the source requests a closed ancestor with an open descendant or otherwise violates Task lifecycle invariants, report the conflict and ask whether to keep the ancestor open, change a descendant's mapped state, or force the transition. Use force only for the user's explicit choice.
 13. Archive Tasks whose source directories were under Trellis `tasks/archive/`, after they are closed. Preserve closed-but-unarchived Tasks as closed and unarchived.
@@ -99,11 +99,12 @@ Run `task-core check`, then verify through Task Core rather than trusting the fi
 
 1. Use `task_find` with `include_archived: true` and compare the expected migrated count.
 2. Use `task_read` on every migrated root and inspect topology, managed validation, status, archive state, branch, body, and recent WAL.
-3. Confirm every migrated child has the intended parent and every explicit relation resolves to the new UUID.
-4. Compare destination materials with the migration manifest or source inventory. Verify checksums when exact preservation matters. Account explicitly for renamed `task.json`, linked large artifacts, and every intentionally excluded path.
-5. Search migrated bodies and materials for stale `.trellis/tasks/...` links. Rewrite links that should target migrated material; keep provenance references that are intentionally historical.
-6. Confirm archived Tasks are closed and active source Tasks did not become archived merely because they were terminal.
-7. Check Git status. Ensure the selected Git policy matches what is actually tracked or ignored and that no unrelated files were changed.
+3. For every supplied `created_at`, confirm the managed value matches at millisecond precision, the UUIDv7 timestamp represents the same instant, and each top-level directory uses that timestamp's own `YYYY-MM/DD` calendar date. Confirm the initial WAL timestamp and filename instead reflect the actual migration time.
+4. Confirm every migrated child has the intended parent and every explicit relation resolves to the new UUID.
+5. Compare destination materials with the migration manifest or source inventory. Verify checksums when exact preservation matters. Account explicitly for renamed `task.json`, linked large artifacts, and every intentionally excluded path.
+6. Search migrated bodies and materials for stale `.trellis/tasks/...` links. Rewrite links that should target migrated material; keep provenance references that are intentionally historical.
+7. Confirm archived Tasks are closed and active source Tasks did not become archived merely because they were terminal.
+8. Check Git status. Ensure the selected Git policy matches what is actually tracked or ignored and that no unrelated files were changed.
 
 Stop and report discrepancies. Do not delete or rewrite the source to make verification pass.
 

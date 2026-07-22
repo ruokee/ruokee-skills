@@ -57,11 +57,17 @@ def test_real_stdio_mcp_lists_and_calls_five_contracts(project: Path) -> None:
             assert all(tool.inputSchema for tool in listed.tools)
             assert all(tool.inputSchema.get("type") == "object" for tool in listed.tools)
             assert all("$defs" not in tool.inputSchema for tool in listed.tools)
+            create_tool = next(tool for tool in listed.tools if tool.name == "task_create")
+            created_at_schema = create_tool.inputSchema["properties"]["task"]["properties"]["created_at"]
+            assert "Only set this when creating a historical Task" in created_at_schema["description"]
+            assert "For ordinary Task creation, omit this field" in created_at_schema["description"]
+            assert create_tool.description is not None
+            assert "Omit created_at for ordinary creation" in create_tool.description
             created = await session.call_tool(
                 "task_create",
                 {
                     "type": "task",
-                    "task": {"name": "MCP Task"},
+                    "task": {"name": "MCP Task", "created_at": "2024-02-03T23:05:06.789-05:00"},
                     "user_confirmed": True,
                     "cwd": str(project),
                 },
@@ -76,6 +82,7 @@ def test_real_stdio_mcp_lists_and_calls_five_contracts(project: Path) -> None:
                 "task_read", {"task_ref": task_id, "view": "summary", "cwd": str(project)}
             )
             assert read.structuredContent is not None and read.structuredContent["ok"] is True
+            assert read.structuredContent["data"]["metadata"]["created_at"] == "2024-02-03T23:05:06.789-05:00"
             updated = await session.call_tool(
                 "task_update",
                 {"task_ref": task_id, "patch": {"branch": "mcp/verified"}, "cwd": str(project)},
@@ -86,6 +93,7 @@ def test_real_stdio_mcp_lists_and_calls_five_contracts(project: Path) -> None:
             )
             assert logged.structuredContent is not None and logged.structuredContent["ok"] is True
             task_dir = Path(found.structuredContent["data"]["tasks"][0]["task_dir"])
+            assert task_dir.relative_to(project / ".task").parts[:2] == ("2024-02", "03")
             assert "codex:unknown" in next((task_dir / "wal").glob("*.md")).read_text()
 
     asyncio.run(scenario())

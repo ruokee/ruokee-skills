@@ -57,13 +57,22 @@ def test_standalone_invoke_concurrency_and_mcp(tmp_path: Path) -> None:
             project,
             env,
             "task_create",
-            {"type": "task", "task": {"name": f"Binary {index}"}, "user_confirmed": True},
+            {
+                "type": "task",
+                "task": {"name": f"Binary {index}", "created_at": "2024-02-03T23:05:06.789-05:00"},
+                "user_confirmed": True,
+            },
         )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         created = list(pool.map(create, range(2)))
     leaves = [Path(item["data"]["created"][0]["task_dir"]).name for item in created]
     assert len(set(leaves)) == 2
+    assert all(
+        Path(item["data"]["created"][0]["task_dir"]).relative_to(project / ".task").parts[:2]
+        == ("2024-02", "03")
+        for item in created
+    )
 
     async def mcp_scenario() -> None:
         launch_root = tmp_path / "plugin"

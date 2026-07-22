@@ -22,7 +22,7 @@ def create_task(project: Path, name: str = "实现 Task MVP", **fields: object) 
     return result["data"]["created"][0]
 
 
-def test_embedded_init_ignore_and_strict_creation(project: Path) -> None:
+def test_embedded_init_ignore_and_strict_creation(project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert (project / ".task/.gitignore").read_text() == "*\n"
     assert (project / ".task/.cache/.gitignore").read_text() == "*\n"
     assert (project / ".task/.cache/CACHEDIR.TAG").is_file()
@@ -30,14 +30,61 @@ def test_embedded_init_ignore_and_strict_creation(project: Path) -> None:
         task_create({"type": "task", "task": {"name": "未确认"}}, cwd=str(project))
     assert exc.value.code == "task_creation_confirmation_required"
 
+    recorded_at = datetime.fromisoformat("2026-07-22T14:15:16.987654+08:00")
+    monkeypatch.setattr("task_core.service.now_local", lambda: recorded_at)
     created = create_task(project)
     task_dir = Path(str(created["task_dir"]))
-    assert task_dir.relative_to(project / ".task").parts[:2] == (task_dir.parent.parent.name, task_dir.parent.name)
+    assert task_dir.relative_to(project / ".task").parts[:2] == ("2026-07", "22")
     metadata = load_task_document(task_dir / "TASK.md").metadata
     assert metadata["status"] == "open"
     assert metadata["id"] == created["id"]
+    assert metadata["created_at"] == "2026-07-22T14:15:16.987+08:00"
     assert UUID(metadata["id"]).int >> 80 == int(datetime.fromisoformat(metadata["created_at"]).timestamp() * 1000)
     assert (task_dir / "wal").is_dir()
+    wal = (task_dir / "wal/2026-07-22.md").read_text()
+    assert "## 2026-07-22T14:15:16.987+08:00 · codex:test" in wal
+
+
+def test_historical_creation_uses_original_time_except_for_wal(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recorded_at = datetime.fromisoformat("2026-07-22T14:15:16.987654+08:00")
+    monkeypatch.setattr("task_core.service.now_local", lambda: recorded_at)
+    original = datetime.fromisoformat("2024-02-03T23:05:06.789123-05:00")
+
+    created = create_task(project, "Historical Task", created_at=original.isoformat())
+
+    task_dir = Path(str(created["task_dir"]))
+    metadata = load_task_document(task_dir / "TASK.md").metadata
+    assert metadata["created_at"] == "2024-02-03T23:05:06.789-05:00"
+    assert UUID(metadata["id"]).int >> 80 == int(original.timestamp() * 1000)
+    assert task_dir.relative_to(project / ".task").parts[:2] == ("2024-02", "03")
+    wal_files = list((task_dir / "wal").iterdir())
+    assert [path.name for path in wal_files] == ["2026-07-22.md"]
+    wal = wal_files[0].read_text()
+    assert "## 2026-07-22T14:15:16.987+08:00 · codex:test" in wal
+    assert "2024-02-03T23:05:06.789-05:00" not in wal
+
+
+@pytest.mark.parametrize(
+    ("created_at", "code"),
+    [
+        pytest.param(None, "request_invalid", id="non-string"),
+        pytest.param("not-a-time", "request_invalid", id="malformed"),
+        pytest.param("2024-02-03T23:05:06", "request_invalid", id="missing-timezone"),
+        pytest.param(
+            "1969-12-31T23:59:59.999999+00:00",
+            "timestamp_out_of_range",
+            id="before-uuid-epoch",
+        ),
+    ],
+)
+def test_historical_creation_rejects_invalid_created_at(
+    project: Path, created_at: object, code: str
+) -> None:
+    with pytest.raises(TaskError) as exc:
+        create_task(project, "Invalid historical time", created_at=created_at)
+    assert exc.value.code == code
 
 
 def test_uninitialized_project_stops_and_permissive_creation_allows_unconfirmed(isolated_env: Path) -> None:
@@ -186,6 +233,38 @@ def test_all_supported_references_and_uuid_prefix_rejection(project: Path) -> No
     with pytest.raises(TaskError) as exc:
         task_read({"task_ref": str(created["id"])[:12]}, cwd=str(project))
     assert exc.value.code == "task_not_found"
+
+
+def test_subtasks_can_preserve_individual_created_at_values(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recorded_at = datetime.fromisoformat("2026-07-22T14:15:16.987654+08:00")
+    monkeypatch.setattr("task_core.service.now_local", lambda: recorded_at)
+    parent = create_task(project, "Historical parent")
+    original = datetime.fromisoformat("2024-02-03T23:05:06.789123-05:00")
+
+    children = task_create(
+        {
+            "type": "subtasks",
+            "parent_ref": parent["id"],
+            "subtasks": [
+                {"name": "Historical child", "created_at": original.isoformat()},
+                {"name": "Current child"},
+            ],
+            "actor": "codex:test",
+        },
+        cwd=str(project),
+    )["data"]["created"]
+
+    expected = [original, recorded_at]
+    for child, created_at in zip(children, expected, strict=True):
+        task_dir = Path(str(child["task_dir"]))
+        metadata = load_task_document(task_dir / "TASK.md").metadata
+        assert metadata["created_at"] == created_at.isoformat(timespec="milliseconds")
+        assert UUID(metadata["id"]).int >> 80 == int(created_at.timestamp() * 1000)
+        wal_files = list((task_dir / "wal").iterdir())
+        assert [path.name for path in wal_files] == ["2026-07-22.md"]
+        assert "## 2026-07-22T14:15:16.987+08:00 · codex:test" in wal_files[0].read_text()
 
 
 def test_subtasks_relations_and_lifecycle(project: Path) -> None:

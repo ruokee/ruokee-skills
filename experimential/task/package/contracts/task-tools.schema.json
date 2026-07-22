@@ -100,6 +100,11 @@
           "body": {
             "type": "string"
           },
+          "created_at": {
+            "description": "Only set this when creating a historical Task with a known timezone-aware original timestamp. For ordinary Task creation, omit this field so Core uses the actual creation time. When set, it controls managed created_at, UUIDv7, and the top-level partition. WAL still records the actual creation time.",
+            "type": "string",
+            "format": "date-time"
+          },
           "branch": {
             "type": "string"
           },
@@ -148,6 +153,11 @@
             },
             "body": {
               "type": "string"
+            },
+            "created_at": {
+              "description": "Only set this when creating a historical Task with a known timezone-aware original timestamp. For ordinary Task creation, omit this field so Core uses the actual creation time. When set, it controls managed created_at, UUIDv7, and the top-level partition. WAL still records the actual creation time.",
+              "type": "string",
+              "format": "date-time"
             },
             "branch": {
               "type": "string"

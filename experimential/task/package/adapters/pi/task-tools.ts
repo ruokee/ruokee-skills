@@ -51,7 +51,8 @@ const labels: Record<string, string> = {
 const descriptions: Record<string, string> = {
   task_find: "Find existing project Tasks without loading full context.",
   task_read: "Read one Task as metadata, summary, or detailed context.",
-  task_create: "Create one confirmed top-level Task or 1-50 subtasks.",
+  task_create:
+    "Create one confirmed top-level Task or 1-50 subtasks. Omit created_at for ordinary creation; set it only for a historical Task with a known timestamp.",
   task_update: "Apply a semantic Task patch and at most one lifecycle action.",
   task_log: "Append one durable work activity entry to a Task WAL.",
 };

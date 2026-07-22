@@ -17,6 +17,7 @@ from ruamel.yaml.comments import CommentedMap
 
 from task_core import PROTOCOL_VERSION, SCHEMA_VERSION, VERSION
 from task_core.config import load_config, load_registry, registry_path
+from task_core.contracts import CreatedAt
 from task_core.contracts import validate as validate_contract
 from task_core.errors import TaskError, success
 from task_core.store import (
@@ -394,6 +395,19 @@ def _new_document(item: dict[str, Any], created: datetime) -> TaskDocument:
     return TaskDocument(metadata, body.encode(), "\n")
 
 
+def _task_created_at(item: dict[str, Any], recorded_at: datetime) -> datetime:
+    if "created_at" not in item:
+        return recorded_at
+    value = item["created_at"]
+    if not isinstance(value, str):
+        raise TaskError("request_invalid", "created_at 必须是带时区的 RFC 3339 时间")
+    try:
+        created_at = msgspec.convert(value, CreatedAt)
+    except msgspec.ValidationError as exc:
+        raise TaskError("request_invalid", "created_at 必须是带时区的 RFC 3339 时间") from exc
+    return created_at
+
+
 def _validate_initial_relations(context: ProjectContext, document: TaskDocument) -> None:
     records = {item.id: item for item in discover_tasks(context, penetrate_closed=True) if item.valid}
     for field in ("depends_on", "related_to"):
@@ -419,7 +433,7 @@ def task_create(request: dict[str, Any], *, cwd: str | None = None) -> dict[str,
     context = discover_project(Path(cwd or request.get("cwd") or os.getcwd()))
     kind = request.get("type")
     actor = normalize_actor(request.get("actor"))
-    created = now_local()
+    recorded_at = now_local()
     items: list[dict[str, Any]]
     parent_record: TaskRecord | None = None
     parent_ref: str | None = None
@@ -448,7 +462,8 @@ def task_create(request: dict[str, Any], *, cwd: str | None = None) -> dict[str,
     else:
         raise TaskError("request_invalid", "type 必须是 task 或 subtasks")
 
-    documents = [_new_document(item, created) for item in items]
+    created_times = [_task_created_at(item, recorded_at) for item in items]
+    documents = [_new_document(item, created_at) for item, created_at in zip(items, created_times, strict=True)]
     names = [str(document.metadata["name"]) for document in documents]
     if len({slugify(name) for name in names}) != len(names):
         raise TaskError("directory_exists", "同一批次存在重复目录 slug")
@@ -470,7 +485,7 @@ def task_create(request: dict[str, Any], *, cwd: str | None = None) -> dict[str,
             parent = parent_record.task_dir
         for document in documents:
             _validate_initial_relations(context, document)
-        partition = _task_partition(parent, top_level=top_level, date=created)
+        partition = _task_partition(parent, top_level=top_level, date=created_times[0])
         slots = _next_slots(partition, len(documents), top_level=top_level)
         targets = [
             partition / f"{slot:02d}--{slugify(str(doc.metadata['name']))}"
@@ -487,8 +502,11 @@ def task_create(request: dict[str, Any], *, cwd: str | None = None) -> dict[str,
                 (current / "wal").mkdir()
                 (current / "subtasks").mkdir()
                 atomic_write(current / "TASK.md", dump_task_document(document))
-                wal_path = current / "wal" / f"{created:%Y-%m-%d}.md"
-                atomic_write(wal_path, _wal_entry(created.isoformat(timespec="milliseconds"), actor, "创建 Task。"))
+                wal_path = current / "wal" / f"{recorded_at:%Y-%m-%d}.md"
+                atomic_write(
+                    wal_path,
+                    _wal_entry(recorded_at.isoformat(timespec="milliseconds"), actor, "创建 Task。"),
+                )
                 staged.append(current)
             for current, target in zip(staged, targets, strict=True):
                 os.replace(current, target)
@@ -793,9 +811,10 @@ def version_info() -> dict[str, str]:
 
 
 def uuid7_at(timestamp: datetime) -> UUID:
-    milliseconds = int(timestamp.timestamp() * 1000)
-    if not 0 <= milliseconds < 1 << 48:
-        raise TaskError("timestamp_out_of_range", "当前时间无法编码为 UUIDv7")
+    raw_milliseconds = timestamp.timestamp() * 1000
+    if not 0 <= raw_milliseconds < 1 << 48:
+        raise TaskError("timestamp_out_of_range", "时间无法编码为 UUIDv7")
+    milliseconds = int(raw_milliseconds)
     value = milliseconds << 80
     value |= 0x7 << 76
     value |= secrets.randbits(12) << 64

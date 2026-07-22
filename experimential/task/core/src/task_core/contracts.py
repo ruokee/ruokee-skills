@@ -1,8 +1,21 @@
-from typing import Any, Literal
+from datetime import datetime
+from typing import Annotated, Any, Literal
 
 import msgspec
 
 Unset = msgspec.UnsetType
+CreatedAt = Annotated[
+    datetime,
+    msgspec.Meta(
+        tz=True,
+        description=(
+            "Only set this when creating a historical Task with a known timezone-aware original timestamp. "
+            "For ordinary Task creation, omit this field so Core uses the actual creation time. "
+            "When set, it controls managed created_at, UUIDv7, and the top-level partition. "
+            "WAL still records the actual creation time."
+        ),
+    ),
+]
 
 
 class FindRequest(msgspec.Struct, forbid_unknown_fields=True):
@@ -27,6 +40,7 @@ class ReadRequest(msgspec.Struct, forbid_unknown_fields=True):
 class TaskItem(msgspec.Struct, forbid_unknown_fields=True):
     name: str
     body: str | Unset = msgspec.UNSET
+    created_at: CreatedAt | Unset = msgspec.UNSET
     branch: str | Unset = msgspec.UNSET
     depends_on: list[str] | Unset = msgspec.UNSET
     related_to: list[str] | Unset = msgspec.UNSET

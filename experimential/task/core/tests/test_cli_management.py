@@ -9,6 +9,7 @@ import pytest
 from task_core.errors import TaskError
 from task_core.management import check_project, rename_task
 from task_core.service import task_create
+from task_core.yamlio import load_task_document
 
 
 def create(project: Path, name: str = "Rename Me") -> dict[str, object]:
@@ -87,6 +88,30 @@ def test_invoke_domain_error_uses_zero_exit(project: Path) -> None:
     assert process.returncode == 0
     result = json.loads(process.stdout)
     assert result["ok"] is False and result["error"]["code"] == "task_not_found"
+
+
+def test_invoke_accepts_historical_created_at_contract(project: Path) -> None:
+    process = subprocess.run(
+        [sys.executable, "-m", "task_core", "invoke", "task_create"],
+        input=json.dumps(
+            {
+                "type": "task",
+                "task": {"name": "Historical CLI Task", "created_at": "2024-02-03T23:05:06.789-05:00"},
+                "user_confirmed": True,
+            }
+        ),
+        text=True,
+        capture_output=True,
+        cwd=project,
+        check=False,
+    )
+
+    assert process.returncode == 0
+    result = json.loads(process.stdout)
+    assert result["ok"] is True
+    task_dir = Path(result["data"]["created"][0]["task_dir"])
+    assert task_dir.relative_to(project / ".task").parts[:2] == ("2024-02", "03")
+    assert load_task_document(task_dir / "TASK.md").metadata["created_at"] == "2024-02-03T23:05:06.789-05:00"
 
 
 def test_invoke_protocol_error_is_nonzero(project: Path) -> None:
