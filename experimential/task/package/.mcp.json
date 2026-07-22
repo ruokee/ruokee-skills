@@ -4,8 +4,9 @@
       "command": "sh",
       "args": [
         "-c",
-        "if [ -n \"$CODEX_PLUGIN_ROOT\" ]; then plugin_root=$CODEX_PLUGIN_ROOT; export TASK_HOST=codex; else plugin_root=$CLAUDE_PLUGIN_ROOT; export TASK_HOST=claude; fi; exec \"$plugin_root/bin/task-core\" mcp"
-      ]
+        "if [ -n \"${CLAUDE_PLUGIN_ROOT:-}\" ]; then plugin_root=$CLAUDE_PLUGIN_ROOT; export TASK_HOST=claude; else plugin_root=.; export TASK_HOST=codex; fi; exec \"$plugin_root/bin/task-core\" mcp"
+      ],
+      "cwd": "."
     }
   }
 }

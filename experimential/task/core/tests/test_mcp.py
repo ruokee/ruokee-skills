@@ -13,17 +13,24 @@ from task_core.contracts import schemas
 
 def test_package_versions_and_generated_contracts_are_lockstep() -> None:
     package = Path(__file__).resolve().parents[2] / "package"
-    versions = [
-        json.loads((package / ".codex-plugin/plugin.json").read_text())["version"],
+    codex_version = json.loads((package / ".codex-plugin/plugin.json").read_text())["version"]
+    module_versions = [
+        codex_version.split("+", 1)[0],
         json.loads((package / ".claude-plugin/plugin.json").read_text())["version"],
         json.loads((package / "package.json").read_text())["version"],
     ]
-    assert versions == [VERSION, VERSION, VERSION]
+    assert module_versions == [VERSION, VERSION, VERSION]
     assert json.loads((package / "contracts/task-tools.schema.json").read_text()) == schemas()
+    plugin_mcp = json.loads((package / ".mcp.json").read_text())["mcpServers"]["task"]
+    codex_mcp = json.loads((package / "adapters/codex.mcp.json").read_text())["mcpServers"]["task"]
+    assert plugin_mcp["cwd"] == "."
+    assert codex_mcp["cwd"] == "."
+    assert codex_mcp["command"] == "./bin/task-core"
 
 
 def test_real_stdio_mcp_lists_and_calls_five_contracts(project: Path) -> None:
     async def scenario() -> None:
+        package = Path(__file__).resolve().parents[2] / "package"
         env = {
             "HOME": os.environ["HOME"],
             "PATH": os.environ["PATH"],
@@ -34,7 +41,7 @@ def test_real_stdio_mcp_lists_and_calls_five_contracts(project: Path) -> None:
         parameters = StdioServerParameters(
             command=sys.executable,
             args=["-m", "task_core", "mcp"],
-            cwd=project,
+            cwd=package,
             env=env,
         )
         async with stdio_client(parameters) as streams, ClientSession(*streams) as session:
@@ -56,19 +63,27 @@ def test_real_stdio_mcp_lists_and_calls_five_contracts(project: Path) -> None:
                     "type": "task",
                     "task": {"name": "MCP Task"},
                     "user_confirmed": True,
+                    "cwd": str(project),
                 },
             )
             assert created.structuredContent is not None
             assert created.structuredContent["ok"] is True
-            found = await session.call_tool("task_find", {"query": "MCP Task"})
+            found = await session.call_tool("task_find", {"query": "MCP Task", "cwd": str(project)})
             assert found.structuredContent is not None
             assert len(found.structuredContent["data"]["tasks"]) == 1
             task_id = found.structuredContent["data"]["tasks"][0]["id"]
-            read = await session.call_tool("task_read", {"task_ref": task_id, "view": "summary"})
+            read = await session.call_tool(
+                "task_read", {"task_ref": task_id, "view": "summary", "cwd": str(project)}
+            )
             assert read.structuredContent is not None and read.structuredContent["ok"] is True
-            updated = await session.call_tool("task_update", {"task_ref": task_id, "patch": {"branch": "mcp/verified"}})
+            updated = await session.call_tool(
+                "task_update",
+                {"task_ref": task_id, "patch": {"branch": "mcp/verified"}, "cwd": str(project)},
+            )
             assert updated.structuredContent is not None and updated.structuredContent["data"]["changed"] is True
-            logged = await session.call_tool("task_log", {"task_ref": task_id, "message": "五工具 smoke 完成。"})
+            logged = await session.call_tool(
+                "task_log", {"task_ref": task_id, "message": "五工具 smoke 完成。", "cwd": str(project)}
+            )
             assert logged.structuredContent is not None and logged.structuredContent["ok"] is True
             task_dir = Path(found.structuredContent["data"]["tasks"][0]["task_dir"])
             assert "codex:unknown" in next((task_dir / "wal").glob("*.md")).read_text()

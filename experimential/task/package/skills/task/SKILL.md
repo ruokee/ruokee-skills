@@ -11,6 +11,8 @@ Use the five Task tools for durable project state. Treat Task files as user-owne
 
 Start every new session unbound. Do not infer a persistent current Task from the previous session.
 
+Pass the current absolute workspace `cwd` on every Task tool call. The packaged MCP server starts from its plugin directory so that its runtime is portable; process cwd is therefore not project context. Re-resolve `cwd` after switching worktrees or directories.
+
 1. When the user gives an ID, exact name, path, directory name, or branch, call `task_find` or `task_read`.
 2. When the user only says “continue”, use cwd, branch, worktree changes, and `task_find` as evidence.
 3. If resolution is ambiguous, show the candidates and ask the user. Never silently choose by similarity.

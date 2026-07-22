@@ -1,6 +1,6 @@
 {
   "name": "task",
-  "version": "0.1.0",
+  "version": "0.1.0+codex.20260722031425",
   "description": "Persistent project Tasks for Codex, Claude Code, and Pi",
   "author": {
     "name": "Ruokee",
@@ -15,7 +15,11 @@
     "longDescription": "A deterministic file-backed Task system that keeps work state, relationships, lifecycle, and activity logs portable across agent hosts and sessions.",
     "developerName": "Ruokee",
     "category": "Productivity",
-    "capabilities": ["Read", "Write", "Local tools"],
+    "capabilities": [
+      "Read",
+      "Write",
+      "Local tools"
+    ],
     "defaultPrompt": [
       "Find and resume an existing project Task.",
       "Create a Task for this confirmed multi-session effort.",

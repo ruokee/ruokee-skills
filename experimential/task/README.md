@@ -47,3 +47,5 @@ pi install /path/to/ruokee-skills/experimential/task/package
 ```
 
 三套 adapter 与 Core 在 `0.x` 阶段按同一个模块版本发布。可用 `package/bin/task-core --version` 核对模块版本、进程协议版本和数据 schema 版本。
+
+本地迭代时，Codex manifest 可在模块版本后添加 `+codex.<cachebuster>` 构建元数据以刷新插件缓存；其 `+` 前缀仍须与另外两套 adapter 和 Core 版本一致。

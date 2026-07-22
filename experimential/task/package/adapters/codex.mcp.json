@@ -1,8 +1,9 @@
 {
   "mcpServers": {
     "task": {
-      "command": "${CODEX_PLUGIN_ROOT}/bin/task-core",
+      "command": "./bin/task-core",
       "args": ["mcp"],
+      "cwd": ".",
       "env": {
         "TASK_HOST": "codex"
       }

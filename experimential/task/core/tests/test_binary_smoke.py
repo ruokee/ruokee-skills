@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import shlex
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -30,6 +31,7 @@ def invoke(
 @pytest.mark.skipif(BINARY_ENV not in os.environ, reason="standalone runtime was not selected")
 def test_standalone_invoke_concurrency_and_mcp(tmp_path: Path) -> None:
     binary = str(Path(os.environ[BINARY_ENV]).resolve())
+    package = Path(__file__).resolve().parents[2] / "package"
     project = tmp_path / "project"
     project.mkdir()
     (project / ".git").mkdir()
@@ -64,12 +66,26 @@ def test_standalone_invoke_concurrency_and_mcp(tmp_path: Path) -> None:
     assert len(set(leaves)) == 2
 
     async def mcp_scenario() -> None:
-        parameters = StdioServerParameters(command=binary, args=["mcp"], cwd=project, env=env)
+        launch_root = tmp_path / "plugin"
+        (launch_root / "bin").mkdir(parents=True)
+        launcher = launch_root / "bin/task-core"
+        launcher.write_text(f"#!/bin/sh\nexec {shlex.quote(binary)} \"$@\"\n")
+        launcher.chmod(0o755)
+        mcp = json.loads((package / ".mcp.json").read_text())["mcpServers"]["task"]
+        mcp_env = {**env}
+        mcp_env.pop("CODEX_PLUGIN_ROOT", None)
+        mcp_env.pop("CLAUDE_PLUGIN_ROOT", None)
+        parameters = StdioServerParameters(
+            command=mcp["command"],
+            args=mcp["args"],
+            cwd=launch_root,
+            env=mcp_env,
+        )
         async with stdio_client(parameters) as streams, ClientSession(*streams) as session:
             await session.initialize()
             listed = await session.list_tools()
             assert len(listed.tools) == 5
-            found = await session.call_tool("task_find", {"query": "Binary"})
+            found = await session.call_tool("task_find", {"query": "Binary", "cwd": str(project)})
             assert found.structuredContent is not None
             assert len(found.structuredContent["data"]["tasks"]) == 2
 
