@@ -1,4 +1,22 @@
-# 项目约定
+# Project Agent Guidelines
+
+ruokee-skills 是 Ruokee 的个人 Skills 工作仓库。
+
+## Git Workflow
+
+- Develop and fix code on a task branch. Reuse the branch for the same task; do not edit `main` directly.
+- Commit each atomic task to its branch by default. Stage only files changed for that task, and leave unrelated or unknown changes untouched.
+- Let `git commit` run the repository-level hooks, which cover baseline file hygiene and commit message validation but not each Skill's own checks. If hooks modify task files, restage and commit again; if they report another error, run the failing check to diagnose it.
+- Before requesting review, commit all task changes and leave the related worktree clean so the user can review branch or commit diffs.
+- A request to commit authorizes a branch commit only. Merging into `main` requires user review and explicit authorization.
+- Squash-merge task branches into `main` and keep the branch. This applies even to single-commit branches; do not use plain merge, fast-forward merge, rebase-and-fast-forward, or direct ref movement.
+- Worktree location: `./.worktrees`.
+
+## Rules
+
+- Let the editor handle soft wrapping. Do not hard-wrap strings to the screen width.
+- Do not use `from __future__ import annotations`.
+- Validate changed Skills and Packages with `public/code-quality` and any relevant component-specific checks.
 
 ## 上游 Skill 更新
 
