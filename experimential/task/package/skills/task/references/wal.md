@@ -49,7 +49,7 @@ Optional multi-line detail.
 
 Only a strict H2 line with timestamp and actor starts a parsed entry. The timestamp must include a timezone. A `task_log` message is a non-empty single-line summary; optional `extra_body` may contain multiple lines.
 
-Actor must be a single line and must not contain ` · `. Prefer `codex:<model>`, `claude:<model>`, `pi:<model>`, or a subagent form such as `codex:<subagent-name>:<model>`. When exact context is unavailable, Core uses `<host>:unknown`.
+Actor must be a single line and must not contain ` · `. Set it from the most specific information currently available: an exact runtime `model.id`, then the exact model from the Agent's own context, then the most specific model or model family the Agent can justify, then `<host>:unknown`. Prefer forms such as `codex:<model>`, `claude:<model>`, `pi:<model>`, or a subagent form such as `codex:<subagent-name>:<model>`. Actor is best-effort field context, not an authenticated runtime proof: do not downgrade a known precise model without reason, and do not invent one the Agent cannot justify. When no model context is available, Core uses `<host>:unknown`.
 
 Do not create entry IDs, JSON payloads, or end sentinels. Do not hand-build WAL when `task_log` can append safely.
 
@@ -77,6 +77,18 @@ Use Agent-authored entries for semantic activity that Core cannot infer:
 ## Decide what to log
 
 Log an activity when losing it at the next session would force rediscovery or could cause the wrong next action.
+
+Record on the semantic event, not on a timer or a fixed entry count. Once a durable finding, decision, correction, recoverable milestone, verification result, verified collaboration result, or next-step-changing blocker is formed, append it before starting the next independent line of work or asking the next substantive question. Do not wait for a later milestone, test, or session end to batch it.
+
+Treat these as distinct events with a WAL entry at each boundary before moving on:
+
+- a research or correction conclusion is one event; the code edit it drives is a later, separate event;
+- a recoverable implementation milestone is one event; the verification you then start is a later, separate event;
+- a verification result is one event; the handoff or final response that follows is a later, separate event.
+
+Merge only facts formed together in the same moment or semantic event. A milestone or verification result that happens later must not be folded back into the earlier entry to reduce call count; when it is durable, it earns its own entry.
+
+Let the session-end checkpoint fill only what is still unrecorded, never compress a whole session into a single entry. If the checkpoint would become this session's only WAL entry, that means event-boundary records were missed: identify the distinct findings, corrections, milestones, and verification results that should already have been written and backfill them as separate entries first. Even then, do not manufacture entries for command streams, routine reads, still-working status, or Core's mechanical mutations.
 
 Usually log:
 

@@ -95,17 +95,19 @@ Managed fields:
 | `id` | immutable UUIDv7 |
 | `name` | display name |
 | `status` | `open`, `paused`, or `closed` |
-| `archived` | boolean; true only while closed |
+| `archived` | boolean; true only while closed; omitted means false |
 | `created_at` | timezone-aware RFC 3339 timestamp |
 | `branch` | optional branch name; existence is not guaranteed |
-| `depends_on` | full same-project Task IDs |
-| `related_to` | full same-project Task IDs |
+| `depends_on` | full same-project Task IDs; omitted means empty |
+| `related_to` | full same-project Task IDs; omitted means empty |
 | `last_transition_reason` | latest lifecycle reason |
 | `extra` | optional shallow extension mapping |
 
 Do not add parent, path, project, Task type, assignee, session, active state, revision, etag, or derived timestamps as new first-class semantics.
 
 Use Core operations for managed fields whenever an equivalent operation exists. Core preserves unknown top-level fields and attempts to preserve YAML order, comments, quoting, anchors, and the exact body bytes while changing managed fields.
+
+New Tasks use sparse frontmatter: Core omits `archived` while false and omits an empty `depends_on` or `related_to`. Archiving writes `archived: true` and unarchiving removes the node; adding the first relation creates the field and removing the last one deletes it. An explicit `archived: false` or `[]` in an older file stays valid, and an unrelated update never strips those defaults in passing. Read views still report `archived` as a boolean and relations as arrays, so callers never see the on-disk difference.
 
 If managed fields or frontmatter are invalid, an explicit path read can return `managed_valid: false`, validation errors, and readable content. The candidate cannot join the relation graph, update, or log until repaired. Do not let Core overwrite duplicate keys, unsafe custom tags, or unparseable YAML; read [Diagnostics and Repair](diagnostics-and-repair.md).
 

@@ -101,7 +101,7 @@ If dry-run has no unresolved items:
 task-core rename <task-ref> <new-name>
 ```
 
-Add `--actor` when exact Agent context is known.
+Add `--actor` with the most specific model information currently available, following the same best-effort actor rule as `task_log`.
 
 Core acquires the project lock and all top-level Task locks in stable order, then re-resolves the Task, re-scans references, updates managed name, moves the leaf when needed, updates exact references, and appends a rename WAL entry.
 

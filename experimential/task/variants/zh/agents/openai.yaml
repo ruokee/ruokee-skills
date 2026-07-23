@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task"
+  short_description: "创建、恢复和管理持久项目 Task，用于跨会话跨 Agent 的持续工作"
+  default_prompt: "使用 $task 恢复并继续当前项目中的已有 Task。"

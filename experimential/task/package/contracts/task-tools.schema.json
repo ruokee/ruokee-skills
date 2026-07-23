@@ -134,6 +134,7 @@
         "default": false
       },
       "actor": {
+        "description": "Best-effort Agent/model context, not authenticated identity. Use the most specific available value: an adapter's exact runtime model ID, the Agent's exact current-context model, or the best-supported model or family name. Omit only when no model information is available so Core can use <host>:unknown.",
         "type": "string"
       },
       "cwd": {
@@ -331,6 +332,7 @@
         "additionalProperties": false
       },
       "actor": {
+        "description": "Best-effort Agent/model context, not authenticated identity. Use the most specific available value: an adapter's exact runtime model ID, the Agent's exact current-context model, or the best-supported model or family name. Omit only when no model information is available so Core can use <host>:unknown.",
         "type": "string"
       },
       "cwd": {
@@ -357,6 +359,7 @@
         "type": "string"
       },
       "actor": {
+        "description": "Best-effort Agent/model context, not authenticated identity. Use the most specific available value: an adapter's exact runtime model ID, the Agent's exact current-context model, or the best-supported model or family name. Omit only when no model information is available so Core can use <host>:unknown.",
         "type": "string"
       },
       "cwd": {

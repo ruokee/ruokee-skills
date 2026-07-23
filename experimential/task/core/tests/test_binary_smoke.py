@@ -94,8 +94,32 @@ def test_standalone_invoke_concurrency_and_mcp(tmp_path: Path) -> None:
             await session.initialize()
             listed = await session.list_tools()
             assert len(listed.tools) == 5
+            created = await session.call_tool(
+                "task_create",
+                {
+                    "type": "task",
+                    "task": {"name": "Binary MCP"},
+                    "user_confirmed": True,
+                    "cwd": str(project),
+                },
+            )
+            assert created.structuredContent is not None and created.structuredContent["ok"] is True
             found = await session.call_tool("task_find", {"query": "Binary", "cwd": str(project)})
             assert found.structuredContent is not None
-            assert len(found.structuredContent["data"]["tasks"]) == 2
+            assert len(found.structuredContent["data"]["tasks"]) == 3
+            task_id = created.structuredContent["data"]["created"][0]["id"]
+            read = await session.call_tool(
+                "task_read", {"task_ref": task_id, "view": "metadata", "cwd": str(project)}
+            )
+            assert read.structuredContent is not None and read.structuredContent["ok"] is True
+            updated = await session.call_tool(
+                "task_update",
+                {"task_ref": task_id, "patch": {"branch": "binary/mcp"}, "cwd": str(project)},
+            )
+            assert updated.structuredContent is not None and updated.structuredContent["data"]["changed"] is True
+            logged = await session.call_tool(
+                "task_log", {"task_ref": task_id, "message": "standalone MCP smoke。", "cwd": str(project)}
+            )
+            assert logged.structuredContent is not None and logged.structuredContent["ok"] is True
 
     asyncio.run(mcp_scenario())

@@ -148,9 +148,9 @@ def _validate_metadata(metadata: dict[str, Any], path: Path) -> list[dict[str, s
         fail("name", exc.message)
     if metadata.get("status") not in {"open", "paused", "closed"}:
         fail("status", "status 必须是 open、paused 或 closed")
-    if not isinstance(metadata.get("archived"), bool):
+    if not isinstance(metadata.get("archived", False), bool):
         fail("archived", "archived 必须是 boolean")
-    elif metadata.get("archived") and metadata.get("status") != "closed":
+    elif metadata.get("archived", False) and metadata.get("status") != "closed":
         fail("archived", "只有 closed Task 可以 archived")
     try:
         created = datetime.fromisoformat(str(metadata.get("created_at")))
@@ -183,6 +183,9 @@ def load_record(task_dir: Path) -> TaskRecord:
     except TaskError as exc:
         return TaskRecord(task_dir, None, {}, [{"field": "frontmatter", "message": exc.message}], warnings)
     metadata = _plain_value(document.metadata)
+    metadata.setdefault("archived", False)
+    metadata.setdefault("depends_on", [])
+    metadata.setdefault("related_to", [])
     errors = _validate_metadata(metadata, task_dir)
     raw_extra = document.metadata.get("extra")
     if isinstance(raw_extra, dict) and not all(isinstance(key, str) for key in raw_extra):

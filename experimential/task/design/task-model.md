@@ -47,16 +47,7 @@ schema_version: "2026-07-21"
 id: 019...
 name: 实现任务系统 MVP
 status: open
-archived: false
 created_at: 2026-07-21T14:30:00.123+08:00
-branch: feat/task-system
-depends_on:
-  - 019...
-related_to:
-  - 019...
-last_transition_reason: 等待真实使用反馈
-extra:
-  owner_note: 先支持 Linux
 ---
 
 这里呈现任务现在是什么、目标、范围和材料入口。
@@ -68,15 +59,19 @@ extra:
 | `id` | 必填 | 不可变 UUIDv7 |
 | `name` | 必填 | 展示名称 |
 | `status` | 必填 | `open`、`paused`、`closed` |
-| `archived` | 必填 | boolean；只有 closed 才能为 true |
+| `archived` | 可选 | 缺失等价于 false；只有 closed 才能写 true |
 | `created_at` | 必填 | 带时区的 RFC 3339 时间 |
 | `branch` | 可选 | branch 名本身，不保证存在 |
-| `depends_on` | 可选 | 同 project 的完整 Task ID 列表 |
-| `related_to` | 可选 | 同 project 的完整 Task ID 列表 |
+| `depends_on` | 可选 | 同 project 的完整 Task ID 列表；缺失等价于空列表 |
+| `related_to` | 可选 | 同 project 的完整 Task ID 列表；缺失等价于空列表 |
 | `last_transition_reason` | 可选 | 最近一次 lifecycle 转移原因 |
 | `extra` | 可选 | `dict[str, Any]` 扩展字段 |
 
 不保存可推导或没有稳定语义的 parent、路径、project、Task 类型、assignee、session、active、revision、etag、updated/closed time。
+
+Core 对新文件使用最少显示：create 不写 `archived: false` 或空关系；archive 写 `archived: true`，unarchive 删除该节点；添加第一项关系时创建字段，删除最后一项时删除字段。旧文件中的显式 false 和空列表仍然合法。读取 API 始终补足 `archived: false` 与两个空关系列表，使调用方不依赖磁盘表示。
+
+mutation 只规范化它实际修改的 managed field。无关 branch、extra 或 lifecycle 修改不会顺手删除旧文件中的显式默认字段，避免扩大 diff 或带走字段注释。schema version 不因这项兼容表示调整而变化，也不提供 migration 或 repair 来批量清理旧文件。
 
 未知 frontmatter 顶层字段透明保留。Core 修改 managed fields 时尽量保留字段顺序、注释、引号、anchor 和未知数据，并保持正文 bytes 不变。重复 key、自定义不安全 YAML tag 或无法可靠解析的内容会阻止修改，不能猜测后覆盖。
 
@@ -120,7 +115,7 @@ open ⇄ paused
 
 用户可以显式要求 force close。它只关闭目标，不级联修改后代，并在 WAL 中记录被绕过的检查。关闭 parent 后普通发现不再向下遍历；完整 UUID、明确路径或 check 仍能穿透。
 
-archive 是与三态正交的 boolean，不移动目录。只有 closed Task 能 archive；archived Task 不能 reopen。unarchive 需要 reason 和当前用户明确同意，完成后仍为 closed；继续工作要再单独 reopen。
+archive 是与三态正交的 boolean 语义，不移动目录；磁盘只在 true 时保存该字段。只有 closed Task 能 archive；archived Task 不能 reopen。unarchive 需要 reason 和当前用户明确同意，并删除 `archived` 节点；完成后仍为 closed，继续工作要再单独 reopen。
 
 ## Rename
 

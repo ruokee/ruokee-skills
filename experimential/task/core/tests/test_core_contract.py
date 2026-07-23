@@ -22,6 +22,14 @@ def create_task(project: Path, name: str = "实现 Task MVP", **fields: object) 
     return result["data"]["created"][0]
 
 
+def insert_frontmatter_fields(task_file: Path, *fields: str) -> None:
+    content = task_file.read_text()
+    marker = "created_at:"
+    assert marker in content
+    inserted = "\n".join(fields)
+    task_file.write_text(content.replace(marker, f"{inserted}\n{marker}", 1))
+
+
 def test_embedded_init_ignore_and_strict_creation(project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert (project / ".task/.gitignore").read_text() == "*\n"
     assert (project / ".task/.cache/.gitignore").read_text() == "*\n"
@@ -44,6 +52,125 @@ def test_embedded_init_ignore_and_strict_creation(project: Path, monkeypatch: py
     assert not (task_dir / "subtasks").exists()
     wal = (task_dir / "wal/2026-07-22.md").read_text()
     assert "## 2026-07-22T14:15:16.987+08:00 · codex:test" in wal
+
+
+@pytest.mark.parametrize("relations", [{}, {"depends_on": [], "related_to": []}])
+def test_create_uses_sparse_disk_defaults_and_stable_read_semantics(
+    project: Path, relations: dict[str, list[str]]
+) -> None:
+    created = create_task(project, "Sparse defaults", **relations)
+    task_dir = Path(str(created["task_dir"]))
+    stored = load_task_document(task_dir / "TASK.md").metadata
+    assert {"archived", "depends_on", "related_to"}.isdisjoint(stored)
+    assert created["archived"] is False
+
+    read = task_read({"task_ref": created["id"], "view": "metadata"}, cwd=str(project))
+    assert read["data"]["managed_valid"] is True
+    assert read["data"]["metadata"]["archived"] is False
+    assert read["data"]["metadata"]["depends_on"] == []
+    assert read["data"]["metadata"]["related_to"] == []
+    assert read["data"]["topology"]["depends_on"] == []
+    assert read["data"]["topology"]["related_to"] == []
+    found = task_find({"query": "Sparse defaults"}, cwd=str(project))
+    assert found["data"]["tasks"][0]["archived"] is False
+
+
+def test_legacy_explicit_defaults_remain_valid_and_survive_unrelated_updates(project: Path) -> None:
+    created = create_task(project, "Legacy defaults")
+    task_file = Path(str(created["task_dir"])) / "TASK.md"
+    insert_frontmatter_fields(task_file, "archived: false", "depends_on: []", "related_to: []")
+
+    before = task_read({"task_ref": created["id"], "view": "metadata"}, cwd=str(project))
+    assert before["data"]["managed_valid"] is True
+    assert before["warnings"] == []
+
+    task_update(
+        {
+            "task_ref": created["id"],
+            "patch": {"branch": "legacy/preserved", "extra": {"set": {"owner": "Ruokee"}}},
+        },
+        cwd=str(project),
+    )
+    task_update(
+        {"task_ref": created["id"], "patch": {"transition": {"status": "paused", "reason": "暂缓"}}},
+        cwd=str(project),
+    )
+    stored = load_task_document(task_file).metadata
+    assert stored["archived"] is False
+    assert stored["depends_on"] == []
+    assert stored["related_to"] == []
+
+
+def test_relation_and_archive_mutations_write_sparse_canonical_fields(project: Path) -> None:
+    source = create_task(project, "Sparse mutations")
+    target = create_task(project, "Sparse target")
+    task_file = Path(str(source["task_dir"])) / "TASK.md"
+
+    task_update(
+        {
+            "task_ref": source["id"],
+            "patch": {
+                "depends_on": {"add": [target["id"]]},
+                "related_to": {"add": [target["id"]]},
+            },
+        },
+        cwd=str(project),
+    )
+    stored = load_task_document(task_file).metadata
+    assert stored["depends_on"] == [target["id"]]
+    assert stored["related_to"] == [target["id"]]
+
+    task_update(
+        {
+            "task_ref": source["id"],
+            "patch": {
+                "depends_on": {"remove": [target["id"]]},
+                "related_to": {"remove": [target["id"]]},
+            },
+        },
+        cwd=str(project),
+    )
+    stored = load_task_document(task_file).metadata
+    assert "depends_on" not in stored
+    assert "related_to" not in stored
+
+    task_update(
+        {"task_ref": source["id"], "patch": {"transition": {"status": "closed", "reason": "完成"}}},
+        cwd=str(project),
+    )
+    assert "archived" not in load_task_document(task_file).metadata
+    task_update({"task_ref": source["id"], "patch": {"archive": {"reason": "归档"}}}, cwd=str(project))
+    assert load_task_document(task_file).metadata["archived"] is True
+    task_update(
+        {
+            "task_ref": source["id"],
+            "patch": {"unarchive": {"reason": "恢复可见", "user_confirmed": True}},
+        },
+        cwd=str(project),
+    )
+    assert "archived" not in load_task_document(task_file).metadata
+    read = task_read({"task_ref": source["id"], "view": "metadata"}, cwd=str(project))
+    assert read["data"]["metadata"]["archived"] is False
+
+
+def test_actor_preserves_available_model_detail_and_uses_unknown_last(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created = create_task(project, "Actor detail")
+    monkeypatch.setenv("TASK_HOST", "codex")
+    task_log({"task_ref": created["id"], "message": "粗粒度模型。", "actor": "codex:gpt-5"}, cwd=str(project))
+    task_log(
+        {"task_ref": created["id"], "message": "精确模型。", "actor": "codex:gpt-5.6-sol"},
+        cwd=str(project),
+    )
+    task_log({"task_ref": created["id"], "message": "没有模型信息。"}, cwd=str(project))
+
+    read = task_read({"task_ref": created["id"], "view": "detailed"}, cwd=str(project))
+    assert [entry["actor"] for entry in read["data"]["wal"][-3:]] == [
+        "codex:gpt-5",
+        "codex:gpt-5.6-sol",
+        "codex:unknown",
+    ]
 
 
 def test_historical_creation_uses_original_time_except_for_wal(
@@ -500,7 +627,7 @@ def test_duplicate_uuid_blocks_modification_even_when_name_is_unique(project: Pa
 def test_relation_ids_must_be_full_uuid7(project: Path) -> None:
     created = create_task(project, "Bad relation")
     task_file = Path(str(created["task_dir"])) / "TASK.md"
-    task_file.write_text(task_file.read_text().replace("depends_on: []", "depends_on: [not-a-uuid]"))
+    insert_frontmatter_fields(task_file, "depends_on: [not-a-uuid]")
     result = task_read({"task_ref": str(task_file.parent), "view": "metadata"}, cwd=str(project))
     assert result["data"]["managed_valid"] is False
     assert any(item["field"] == "depends_on" for item in result["data"]["validation_errors"])
@@ -514,11 +641,7 @@ def test_handwritten_missing_relations_warn_but_only_block_close(project: Path) 
     created = create_task(project, "Missing relations")
     missing = "019f849f-1ab6-715d-a305-b4abe2afc4bf"
     task_file = Path(str(created["task_dir"])) / "TASK.md"
-    task_file.write_text(
-        task_file.read_text()
-        .replace("depends_on: []", f"depends_on: [{missing}]")
-        .replace("related_to: []", f"related_to: [{missing}]")
-    )
+    insert_frontmatter_fields(task_file, f"depends_on: [{missing}]", f"related_to: [{missing}]")
     result = task_read({"task_ref": created["id"], "view": "metadata"}, cwd=str(project))
     assert result["data"]["managed_valid"] is True
     assert {item["code"] for item in result["warnings"]} >= {"dependency_missing", "related_missing"}

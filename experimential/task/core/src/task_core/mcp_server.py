@@ -18,7 +18,12 @@ DESCRIPTIONS = {
         "Omit created_at for ordinary creation; set it only for a historical Task with a known timestamp."
     ),
     "task_update": "Apply a semantic Task patch and at most one lifecycle action.",
-    "task_log": "Append one durable work activity entry to a Task WAL.",
+    "task_log": (
+        "Call immediately when a finding, decision, correction, recoverable milestone, verification result, "
+        "verified collaboration result, or blocker becomes durable, before later implementation, validation, "
+        "handoff, final response, or another work branch. Merge only facts formed in the same semantic event; "
+        "do not wait and combine events from different times into one session-end entry."
+    ),
 }
 
 

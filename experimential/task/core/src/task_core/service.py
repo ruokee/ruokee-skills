@@ -385,7 +385,6 @@ def _new_document(item: dict[str, Any], created: datetime) -> TaskDocument:
     metadata["id"] = str(uuid7_at(created))
     metadata["name"] = name
     metadata["status"] = "open"
-    metadata["archived"] = False
     metadata["created_at"] = created.isoformat(timespec="milliseconds")
     for field in ("branch", "depends_on", "related_to", "extra"):
         if field in item and item[field] not in (None, [], {}):
@@ -420,7 +419,11 @@ def _validate_initial_relations(context: ProjectContext, document: TaskDocument)
         missing = [item for item in value if item not in records]
         if missing:
             raise TaskError("relation_target_not_found", f"{field} 包含未知 Task", {"ids": missing})
-        document.metadata[field] = list(dict.fromkeys(value))
+        normalized = list(dict.fromkeys(value))
+        if normalized:
+            document.metadata[field] = normalized
+        else:
+            document.metadata.pop(field, None)
 
 
 def _wal_entry(timestamp: str, actor: str, message: str, extra_body: str | None = None) -> bytes:
@@ -585,7 +588,10 @@ def _relation_delta(metadata: dict[str, Any], field: str, delta: object) -> bool
     new.extend(item for item in add if item not in new)
     if new == raw:
         return False
-    metadata[field] = new
+    if new:
+        metadata[field] = new
+    else:
+        metadata.pop(field, None)
     return True
 
 
@@ -761,7 +767,7 @@ def task_update(request: dict[str, Any], *, cwd: str | None = None) -> dict[str,
             if not isinstance(reason, str) or not reason.strip() or action.get("user_confirmed") is not True:
                 raise TaskError("unarchive_confirmation_required", "unarchive 需要 reason 和当前用户明确确认")
             if metadata["archived"]:
-                metadata["archived"] = False
+                metadata.pop("archived", None)
                 metadata["last_transition_reason"] = reason
                 changed_fields.append("archived")
                 lifecycle_note = f"取消归档 Task。原因：{reason}"

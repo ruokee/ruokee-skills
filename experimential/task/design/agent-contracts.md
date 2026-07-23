@@ -50,6 +50,8 @@ branch 使用独立精确参数，不混入通用 query 的模糊匹配。
 
 actor 的解析顺序是显式参数、adapter/环境上下文、`<host>:unknown`。actor 只帮助理解工作现场，不用于认证、授权或 assignment enforcement；不得包含换行或分隔符 ` · `。
 
+调用方尽最大努力提供当前可得的最具体信息，来源优先级是 adapter 暴露的精确运行时模型、Agent 当前上下文中的精确模型、Agent 有依据的最具体模型或模型族，最后才是 `<host>:unknown`。精确 ID 可用时不能无理由缩写，但 actor 本身仍是 best-effort 信息，不表示经过认证的运行时身份。Core 不解析宿主私有 session 文件或模型目录来推断 actor。
+
 ## `task_find`
 
 `task_find` 搜索已有 Task，不加载完整正文和 WAL。
@@ -97,7 +99,7 @@ subtask 创建：
 - batch 内不能引用尚未创建的 sibling；
 - parent 追加批量创建摘要，每个 child 写自己的创建 WAL。
 
-Core 生成 schema version、UUIDv7、open 状态、`archived: false`、目录和时间。普通创建省略 `created_at`；只有迁移历史 Task 且原始带时区 instant 可靠时才显式传入。显式时间控制 managed `created_at`、UUIDv7 和顶层日期分区，创建 WAL 仍使用实际迁移时间。
+Core 生成 schema version、UUIDv7、open 状态、目录和时间。新建文件省略 `archived: false` 与空关系；读取时仍返回稳定的 false 和空列表语义。普通创建省略 `created_at`；只有迁移历史 Task 且原始带时区 instant 可靠时才显式传入。显式时间控制 managed `created_at`、UUIDv7 和顶层日期分区，创建 WAL 仍使用实际迁移时间。
 
 ## `task_update`
 
@@ -117,9 +119,9 @@ update 不修改 name、正文、parent 或普通材料。name 走 rename CLI；
 
 ## `task_log`
 
-`task_log` 一次追加一条活动记录，接收唯一 Task、非空单行 message、可选多行 extra body 和 actor。
+`task_log` 一次追加一条活动记录，接收唯一 Task、非空单行 message、可选多行 extra body 和 actor。Agent 形成 durable result 后，在进入后续实现、验证、handoff、final response 或另一个独立工作分支前立即调用。同一语义事件内共同形成的事实可以合并；稍后才形成的里程碑或验证结果不能为了少调用而回并到旧事件。
 
-它用于有持续价值的工作活动，不用于每次命令或临时 todo。closed/archived Task 仍可补充事实；managed fields 非法时不允许写 WAL。
+它用于有持续价值的工作活动，不用于每次命令、临时 todo、“仍在工作”状态或 Core 已自动记录的同一机械 mutation。closed/archived Task 仍可补充事实；managed fields 非法时不允许写 WAL。会话结束检查只补充尚未记录的现场；如果它将成为本轮唯一一条日志，Agent 必须先检查并补齐此前漏掉的独立事件边界。
 
 完整语义见 [Context 与 WAL](context-and-wal.md) 和 runtime [WAL reference](../package/skills/task/references/wal.md)。
 

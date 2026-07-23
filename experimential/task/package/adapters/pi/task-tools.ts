@@ -7,6 +7,7 @@ import type { TSchema } from "typebox";
 const core = fileURLToPath(new URL("../../bin/task-core", import.meta.url));
 const contractsPath = fileURLToPath(new URL("../../contracts/task-tools.schema.json", import.meta.url));
 const contracts = JSON.parse(readFileSync(contractsPath, "utf8")) as Record<string, TSchema>;
+const actorOperations = new Set(["task_create", "task_update", "task_log"]);
 
 async function invoke(operation: string, request: Record<string, unknown>, cwd: string, signal?: AbortSignal) {
   return await new Promise<Record<string, unknown>>((resolve, reject) => {
@@ -54,7 +55,8 @@ const descriptions: Record<string, string> = {
   task_create:
     "Create one confirmed top-level Task or 1-50 subtasks. Omit created_at for ordinary creation; set it only for a historical Task with a known timestamp.",
   task_update: "Apply a semantic Task patch and at most one lifecycle action.",
-  task_log: "Append one durable work activity entry to a Task WAL.",
+  task_log:
+    "Call immediately when a finding, decision, correction, recoverable milestone, verification result, verified collaboration result, or blocker becomes durable, before later implementation, validation, handoff, final response, or another work branch. Merge only facts formed in the same semantic event; do not wait and combine events from different times into one session-end entry.",
 };
 
 export default function (pi: ExtensionAPI) {
@@ -65,7 +67,11 @@ export default function (pi: ExtensionAPI) {
       description: descriptions[name],
       parameters: contracts[name],
       async execute(_id, params, signal, _update, ctx) {
-        return result(await invoke(name, params, ctx.cwd, signal));
+        const request = { ...params };
+        if (actorOperations.has(name) && request.actor === undefined && ctx.model?.id) {
+          request.actor = `pi:${ctx.model.id}`;
+        }
+        return result(await invoke(name, request, ctx.cwd, signal));
       },
     });
   }

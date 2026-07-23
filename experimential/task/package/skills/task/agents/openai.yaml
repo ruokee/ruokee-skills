@@ -1,4 +1,4 @@
 interface:
   display_name: "Task"
-  short_description: "持久化项目 Task 的创建、恢复、推进、交接与生命周期管理"
-  default_prompt: "使用 $task 恢复并继续当前项目中的已有 Task。"
+  short_description: "Create, resume, and manage persistent project Tasks"
+  default_prompt: "Use $task to resume and continue an existing Task in the current project."

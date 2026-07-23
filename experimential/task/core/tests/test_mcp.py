@@ -61,8 +61,15 @@ def test_real_stdio_mcp_lists_and_calls_five_contracts(project: Path) -> None:
             created_at_schema = create_tool.inputSchema["properties"]["task"]["properties"]["created_at"]
             assert "Only set this when creating a historical Task" in created_at_schema["description"]
             assert "For ordinary Task creation, omit this field" in created_at_schema["description"]
+            actor_schema = create_tool.inputSchema["properties"]["actor"]
+            assert "Best-effort Agent/model context" in actor_schema["description"]
+            assert "most specific available value" in actor_schema["description"]
             assert create_tool.description is not None
             assert "Omit created_at for ordinary creation" in create_tool.description
+            log_tool = next(tool for tool in listed.tools if tool.name == "task_log")
+            assert log_tool.description is not None
+            assert "Call immediately when a finding" in log_tool.description
+            assert "one session-end entry" in log_tool.description
             created = await session.call_tool(
                 "task_create",
                 {

@@ -16,6 +16,16 @@ CreatedAt = Annotated[
         ),
     ),
 ]
+Actor = Annotated[
+    str,
+    msgspec.Meta(
+        description=(
+            "Best-effort Agent/model context, not authenticated identity. Use the most specific available value: "
+            "an adapter's exact runtime model ID, the Agent's exact current-context model, or the best-supported "
+            "model or family name. Omit only when no model information is available so Core can use <host>:unknown."
+        ),
+    ),
+]
 
 
 class FindRequest(msgspec.Struct, forbid_unknown_fields=True):
@@ -50,14 +60,14 @@ class TaskItem(msgspec.Struct, forbid_unknown_fields=True):
 class CreateTaskRequest(msgspec.Struct, tag="task", tag_field="type", forbid_unknown_fields=True):
     task: TaskItem
     user_confirmed: bool = False
-    actor: str | Unset = msgspec.UNSET
+    actor: Actor | Unset = msgspec.UNSET
     cwd: str | Unset = msgspec.UNSET
 
 
 class CreateSubtasksRequest(msgspec.Struct, tag="subtasks", tag_field="type", forbid_unknown_fields=True):
     parent_ref: str
     subtasks: list[TaskItem]
-    actor: str | Unset = msgspec.UNSET
+    actor: Actor | Unset = msgspec.UNSET
     cwd: str | Unset = msgspec.UNSET
 
 
@@ -102,7 +112,7 @@ class UpdatePatch(msgspec.Struct, forbid_unknown_fields=True):
 class UpdateRequest(msgspec.Struct, forbid_unknown_fields=True):
     task_ref: str
     patch: UpdatePatch
-    actor: str | Unset = msgspec.UNSET
+    actor: Actor | Unset = msgspec.UNSET
     cwd: str | Unset = msgspec.UNSET
 
 
@@ -110,7 +120,7 @@ class LogRequest(msgspec.Struct, forbid_unknown_fields=True):
     task_ref: str
     message: str
     extra_body: str | Unset = msgspec.UNSET
-    actor: str | Unset = msgspec.UNSET
+    actor: Actor | Unset = msgspec.UNSET
     cwd: str | Unset = msgspec.UNSET
 
 

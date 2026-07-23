@@ -1,6 +1,6 @@
 {
   "name": "task",
-  "version": "0.1.1+codex.20260722175233",
+  "version": "0.1.2+codex.20260723094035",
   "description": "Persistent project Tasks for Codex, Claude Code, and Pi",
   "author": {
     "name": "Ruokee",
