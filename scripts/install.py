@@ -6,38 +6,62 @@
 #   "rich>=13.9,<15",
 # ]
 # ///
-"""安装和管理当前仓库中的资源。"""
+"""安装、更新或重置 ruokee-skills 的变体与项目 local Skill。"""
 
+import fcntl
 import hashlib
 import json
 import os
 import re
+import shutil
 import stat
-import tomllib
-from collections.abc import Generator, Iterable
+import subprocess
+import tempfile
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-import shutil
-import subprocess
-import tempfile
 from typing import Any
 
 import rich_click as click
 from rich.console import Console
-from rich.table import Table
+
+from repository import (
+    PROJECT_INSTALL_METADATA,
+    REPO_ROOT,
+    Plugin,
+    RepositoryError,
+    base_version,
+    directory_hash,
+    discover_plugins,
+    materialized_hash,
+    populate_materialized_skill,
+    read_json_object,
+    read_regular_file,
+    repository_state,
+    scan_tree,
+)
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-RESOURCE_DOMAINS = ("public", "experimential", "fork", "third-party")
-METADATA_NAME = "meta.json"
-MANAGER_NAME = "resource-installer"
-SCHEMA_VERSION = 1
-TARGETS = ("codex", "claude")
-WORKSPACE_METADATA_NAME = "meta.toml"
-V2_LAYOUT_VERSION = 2
-V2_RESERVED_VARIANTS = frozenset(("skills", "variants"))
+MARKETPLACE_NAME = "ruokee-skills"
+HOSTS = ("codex", "claude", "pi")
+USER_STATE_SCHEMA = 1
+PROJECT_STATE_SCHEMA = 1
+USER_STATE_FIELDS = frozenset(("host", "plugin", "variant", "source_commit", "installation_id", "base_version", "baseline_hash", "managed_hash", "updated_at"))
+PROJECT_STATE_FIELDS = frozenset(("schema_version", "plugin", "variant", "hosts", "source_commit", "baseline_hash", "managed_hash", "installed_at", "updated_at"))
+HASH_PATTERN = re.compile(r"[0-9a-f]{64}")
+SUPPORTED_HOST_VERSIONS = {
+    "codex": (0, 145, 0),
+    "claude": (2, 1, 207),
+    "pi": (0, 80, 6),
+}
+HOST_VERSION_COMMANDS = {
+    "codex": ("codex", "--version"),
+    "claude": ("claude", "--version"),
+    "pi": ("pi", "--version"),
+}
+COMMAND_TIMEOUT_SECONDS = 120
 
 console = Console()
 click.rich_click.USE_RICH_MARKUP = True
@@ -47,1011 +71,1169 @@ click.rich_click.STYLE_OPTION = "cyan"
 click.rich_click.STYLE_COMMANDS_TABLE_COLUMN_WIDTH_RATIO = (1, 3)
 
 
-class ResourceError(click.ClickException):
-    """可直接展示给 CLI 用户的资源管理错误。"""
+class InstallError(click.ClickException):
+    """可以直接展示给 CLI 用户的安装错误。"""
 
 
 @dataclass(frozen=True)
-class Variant:
-    name: str
-    source: Path
-    layers: tuple["Layer", ...] = ()
+class NativeInstall:
+    host: str
+    plugin: str
+    root: Path
+    skill_root: Path
+    version: str
+    enabled: bool = True
+    source_arg: str | None = None
 
 
 @dataclass(frozen=True)
-class Layer:
-    role: str
-    source: Path
+class ProjectTarget:
+    path: Path
+    hosts: tuple[str, ...]
 
 
-@dataclass(frozen=True)
-class Resource:
-    name: str
-    kind: str
-    domain: str
-    workspace: Path
-    variants: dict[str, Variant]
-    layout_version: int = 1
-    default_variant: str | None = None
+def now_rfc3339() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-@dataclass(frozen=True)
-class InstallationStatus:
-    state: str
-    variant: str | None = None
-    source_hash: str | None = None
-    installed_hash: str | None = None
-    recorded_hash: str | None = None
-    detail: str | None = None
-
-
-def lstat_optional(path: Path) -> os.stat_result | None:
+def fsync_directory(path: Path) -> None:
     try:
-        return path.lstat()
-    except FileNotFoundError:
-        return None
-    except OSError as exc:
-        raise ResourceError(f"无法检查路径：{path}（{exc}）") from exc
-
-
-def read_regular_file_no_follow(path: Path) -> bytes:
-    flags = os.O_RDONLY
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    except OSError:
+        return
     try:
-        descriptor = os.open(path, flags)
-    except OSError as exc:
-        raise ResourceError(f"无法安全读取普通文件：{path}（{exc}）") from exc
-    try:
-        current = os.fstat(descriptor)
-        if not stat.S_ISREG(current.st_mode):
-            raise ResourceError(f"路径不是普通文件：{path}")
-        with os.fdopen(descriptor, "rb", closefd=False) as stream:
-            return stream.read()
-    except OSError as exc:
-        raise ResourceError(f"无法读取文件：{path}（{exc}）") from exc
+        os.fsync(descriptor)
     finally:
         os.close(descriptor)
 
 
-def validate_workspace_directory(workspace: Path) -> None:
-    info = lstat_optional(workspace)
-    if info is None or not stat.S_ISDIR(info.st_mode):
-        raise ResourceError(f"meta-v2 Workspace 必须是非符号链接目录：{workspace}")
+def remove_path(path: Path) -> None:
+    info = path.lstat()
+    if stat.S_ISDIR(info.st_mode):
+        shutil.rmtree(path)
+    else:
+        path.unlink()
 
 
-def parse_relative_directory(workspace: Path, value: Any, field: str) -> Path:
-    if (
-        not isinstance(value, str)
-        or not value
-        or value.startswith("/")
-        or "\\" in value
-    ):
-        raise ResourceError(f"{field} 必须是非空的 Workspace 相对 POSIX 路径")
-    parts = value.split("/")
-    if any(part in ("", ".", "..") for part in parts):
-        raise ResourceError(f"{field} 包含非法路径段：{value!r}")
-    current = workspace
-    for part in parts:
-        current /= part
-        info = lstat_optional(current)
-        if info is None:
-            raise ResourceError(f"{field} 指向不存在的路径：{current}")
-        if not stat.S_ISDIR(info.st_mode):
-            raise ResourceError(
-                f"{field} 的所有路径组件都必须是非符号链接目录：{current}"
-            )
-    return current
-
-
-def validate_variant_name(name: Any, field: str) -> str:
-    if not isinstance(name, str) or not name or name in (".", ".."):
-        raise ResourceError(f"{field} 必须是非空变体名称")
-    if name in V2_RESERVED_VARIANTS:
-        raise ResourceError(f"{field} 使用了保留名称：{name}")
-    if any(ord(character) < 32 or ord(character) == 127 for character in name):
-        raise ResourceError(f"{field} 不能包含控制字符")
-    if "/" in name or "\\" in name:
-        raise ResourceError(f"{field} 不能包含路径分隔符")
-    return name
-
-
-def frontmatter_name(skill_file: Path) -> str:
+def write_json_atomic(path: Path, value: dict[str, Any], *, mode: int = 0o600) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, raw_temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary = Path(raw_temporary)
     try:
-        content = read_regular_file_no_follow(skill_file).decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise ResourceError(f"SKILL.md 不是有效 UTF-8：{skill_file}") from exc
-    lines = content.splitlines()
-    if not lines or lines[0].strip() != "---":
-        raise ResourceError(f"SKILL.md 缺少 YAML frontmatter：{skill_file}")
-    try:
-        end = next(
-            index
-            for index, line in enumerate(lines[1:], start=1)
-            if line.strip() == "---"
-        )
-    except StopIteration as exc:
-        raise ResourceError(f"SKILL.md frontmatter 未闭合：{skill_file}") from exc
-    names: list[str] = []
-    descriptions: list[str] = []
-    for line in lines[1:end]:
-        match = re.fullmatch(r"name\s*:\s*(.*?)\s*", line)
-        if match:
-            value = match.group(1)
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
-                value = value[1:-1]
-            names.append(value)
-        description = re.fullmatch(r"description\s*:\s*(.*?)\s*", line)
-        if description:
-            descriptions.append(description.group(1))
-    if len(names) != 1 or not names[0]:
-        raise ResourceError(f"SKILL.md frontmatter 必须包含唯一的 name：{skill_file}")
-    if len(descriptions) != 1 or not descriptions[0]:
-        raise ResourceError(
-            f"SKILL.md frontmatter 必须包含唯一且非空的 description：{skill_file}"
-        )
-    return names[0]
-
-
-def forbidden_layer_path(relative: Path) -> bool:
-    return (
-        relative.name == METADATA_NAME
-        or "__pycache__" in relative.parts
-        or relative.match("*.py[cod]")
-    )
-
-
-def scan_layer(source: Path, role: str) -> dict[Path, str]:
-    root_info = lstat_optional(source)
-    if root_info is None or not stat.S_ISDIR(root_info.st_mode):
-        raise ResourceError(f"{role} layer 必须是非符号链接目录：{source}")
-    entries: dict[Path, str] = {}
-
-    def visit(directory: Path, relative_directory: Path) -> None:
+        os.fchmod(descriptor, mode)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        fsync_directory(path.parent)
+    except BaseException:
         try:
-            children = sorted(os.scandir(directory), key=lambda item: item.name)
-        except OSError as exc:
-            raise ResourceError(f"无法遍历 {role} layer：{directory}（{exc}）") from exc
-        for child in children:
-            relative = relative_directory / child.name
-            if forbidden_layer_path(relative):
-                raise ResourceError(
-                    f"{role} layer 包含保留或生成文件：{relative.as_posix()}"
-                )
-            try:
-                info = child.stat(follow_symlinks=False)
-            except OSError as exc:
-                raise ResourceError(
-                    f"无法检查 {role} layer 路径：{child.path}（{exc}）"
-                ) from exc
-            if stat.S_ISDIR(info.st_mode):
-                entries[relative] = "directory"
-                visit(Path(child.path), relative)
-            elif stat.S_ISREG(info.st_mode):
-                entries[relative] = "file"
-            else:
-                raise ResourceError(
-                    f"{role} layer 只允许非符号链接目录和普通文件：{relative.as_posix()}"
-                )
-
-    visit(source, Path())
-    return entries
+            os.close(descriptor)
+        except OSError:
+            pass
+        if temporary.exists():
+            temporary.unlink()
+        raise
 
 
-def validate_overlay(base_entries: dict[Path, str], overlay: Path) -> dict[Path, str]:
-    overlay_entries = scan_layer(overlay, "overlay")
-    if not any(kind == "file" for kind in overlay_entries.values()):
-        raise ResourceError(f"overlay 至少需要一个普通文件：{overlay}")
-    for relative, overlay_kind in overlay_entries.items():
-        base_kind = base_entries.get(relative)
-        if base_kind is not None and base_kind != overlay_kind:
-            raise ResourceError(
-                f"overlay 不允许 file/directory 类型替换：{relative.as_posix()}"
-            )
-    return overlay_entries
-
-
-def parse_workspace_metadata(workspace: Path) -> dict[str, Any]:
-    metadata_path = workspace / WORKSPACE_METADATA_NAME
-    info = lstat_optional(metadata_path)
-    if info is None:
-        raise ResourceError(f"meta-v2 元数据不存在：{metadata_path}")
-    if not stat.S_ISREG(info.st_mode):
-        raise ResourceError(f"meta.toml 必须是非符号链接普通文件：{metadata_path}")
-    try:
-        metadata = tomllib.loads(
-            read_regular_file_no_follow(metadata_path).decode("utf-8")
-        )
-    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-        raise ResourceError(f"meta.toml 损坏：{metadata_path}（{exc}）") from exc
-    expected_top = {"schema_version", "resource_type", "variants"}
-    unknown_top = set(metadata) - expected_top
-    missing_top = expected_top - set(metadata)
-    if unknown_top or missing_top:
-        detail = ", ".join(sorted(unknown_top or missing_top))
-        label = "未知字段" if unknown_top else "缺少字段"
-        raise ResourceError(f"meta.toml {label}：{detail}")
-    if metadata["schema_version"] != SCHEMA_VERSION or isinstance(
-        metadata["schema_version"], bool
-    ):
-        raise ResourceError(
-            f"不支持的 meta.toml schema_version：{metadata['schema_version']!r}"
-        )
-    if metadata["resource_type"] != "skill":
-        raise ResourceError(
-            f"不支持的 meta.toml resource_type：{metadata['resource_type']!r}"
-        )
-    variants = metadata["variants"]
-    if not isinstance(variants, dict):
-        raise ResourceError("meta.toml variants 必须是 table")
-    expected_variants = {"layout_version", "default", "base"}
-    unknown_variants = set(variants) - expected_variants
-    missing_variants = expected_variants - set(variants)
-    if unknown_variants or missing_variants:
-        detail = ", ".join(sorted(unknown_variants or missing_variants))
-        label = "未知字段" if unknown_variants else "缺少字段"
-        raise ResourceError(f"meta.toml variants {label}：{detail}")
-    if variants["layout_version"] != V2_LAYOUT_VERSION or isinstance(
-        variants["layout_version"], bool
-    ):
-        raise ResourceError(
-            f"不支持的 variants.layout_version：{variants['layout_version']!r}"
-        )
-    return variants
-
-
-def discover_v2_resource(domain: str, workspace: Path) -> Resource:
-    validate_workspace_directory(workspace)
-    metadata = parse_workspace_metadata(workspace)
-    name = workspace.name
-    default_variant = validate_variant_name(metadata["default"], "variants.default")
-    base = parse_relative_directory(workspace, metadata["base"], "variants.base")
-    if base.name != name:
-        raise ResourceError(
-            f"base Skill 目录名必须与 Workspace 名一致：{base.name!r} != {name!r}"
-        )
-    skill_file = base / "SKILL.md"
-    skill_info = lstat_optional(skill_file)
-    if skill_info is None or not stat.S_ISREG(skill_info.st_mode):
-        raise ResourceError(f"base 必须包含非符号链接普通文件 SKILL.md：{skill_file}")
-    if frontmatter_name(skill_file) != name:
-        raise ResourceError(f"SKILL.md frontmatter name 必须为 {name!r}：{skill_file}")
-    base_entries = scan_layer(base, "base")
-    base_layer = Layer("base", base)
-    variants = {
-        default_variant: Variant(default_variant, base, (base_layer,)),
-    }
-    overlays_root = workspace / "variants"
-    overlays_info = lstat_optional(overlays_root)
-    if overlays_info is not None:
-        if not stat.S_ISDIR(overlays_info.st_mode):
-            raise ResourceError(f"variants 必须是非符号链接目录：{overlays_root}")
-        try:
-            overlay_entries = sorted(
-                os.scandir(overlays_root), key=lambda item: item.name
-            )
-        except OSError as exc:
-            raise ResourceError(f"无法遍历 variants：{overlays_root}（{exc}）") from exc
-        for entry in overlay_entries:
-            overlay_name = validate_variant_name(entry.name, "overlay 名称")
-            try:
-                overlay_info = entry.stat(follow_symlinks=False)
-            except OSError as exc:
-                raise ResourceError(f"无法检查 overlay：{entry.path}（{exc}）") from exc
-            if not stat.S_ISDIR(overlay_info.st_mode):
-                raise ResourceError(f"overlay 必须是非符号链接目录：{entry.path}")
-            if overlay_name == default_variant:
-                raise ResourceError(f"overlay 不能与 default 同名：{overlay_name}")
-            overlay = Path(entry.path)
-            overlay_layer_entries = validate_overlay(base_entries, overlay)
-            if overlay_layer_entries.get(Path("SKILL.md")) == "file":
-                if frontmatter_name(overlay / "SKILL.md") != name:
-                    raise ResourceError(
-                        f"overlay SKILL.md frontmatter name 必须为 {name!r}：{overlay / 'SKILL.md'}"
-                    )
-            variants[overlay_name] = Variant(
-                overlay_name,
-                base,
-                (base_layer, Layer("overlay", overlay)),
-            )
-    expected_base = base
-    for candidate in sorted(path for path in workspace.iterdir() if path.is_dir()):
-        artifact_root = candidate / name
-        artifact = artifact_root / "SKILL.md"
-        if artifact.is_file() and artifact_root != expected_base:
-            relative = artifact_root.relative_to(workspace)
-            raise ResourceError(
-                f"mixed-variant-layout：发现旧 v1 Skill 树 {relative.as_posix()}"
-            )
-    return Resource(
-        name,
-        "skill",
-        domain,
-        workspace,
-        variants,
-        layout_version=V2_LAYOUT_VERSION,
-        default_variant=default_variant,
-    )
-
-
-def discover_resources(root: Path = REPO_ROOT) -> dict[str, Resource]:
-    """从当前 Workspace 约定发现可安装资源。"""
-    resources: dict[str, Resource] = {}
-    for domain in RESOURCE_DOMAINS:
-        domain_root = root / domain
-        if not domain_root.is_dir():
-            continue
-        for workspace in sorted(
-            path for path in domain_root.iterdir() if path.is_dir()
-        ):
-            name = workspace.name
-            meta_info = lstat_optional(workspace / WORKSPACE_METADATA_NAME)
-            if meta_info is not None:
-                resource = discover_v2_resource(domain, workspace)
-                if name in resources:
-                    previous = resources[name].workspace.relative_to(root)
-                    current = workspace.relative_to(root)
-                    raise ResourceError(
-                        f"资源名称重复：{name}（{previous}、{current}）"
-                    )
-                resources[name] = resource
-                continue
-            variants: dict[str, Variant] = {}
-            direct = workspace / name / "SKILL.md"
-            if direct.is_file():
-                variants["default"] = Variant("default", direct.parent)
-            for candidate in sorted(
-                path for path in workspace.iterdir() if path.is_dir()
-            ):
-                artifact = candidate / name / "SKILL.md"
-                if artifact.is_file():
-                    variants[candidate.name] = Variant(candidate.name, artifact.parent)
-            if not variants:
-                continue
-            if name in resources:
-                previous = resources[name].workspace.relative_to(root)
-                current = workspace.relative_to(root)
-                raise ResourceError(f"资源名称重复：{name}（{previous}、{current}）")
-            resources[name] = Resource(name, "skill", domain, workspace, variants)
-    return resources
-
-
-def default_root(target: str) -> Path:
-    if target == "codex":
-        base = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-        return base / "skills"
-    if target == "claude":
-        return (
-            Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude"))
-            / "skills"
-        )
-    raise ResourceError(f"未知安装目标：{target}")
-
-
-def destination_root(
-    target: str, root: Path | None, global_install: bool = False
-) -> Path:
-    if global_install:
-        return default_root(target).expanduser().resolve()
-    project_root = (root if root is not None else Path.cwd()).expanduser().resolve()
-    if project_root.name == "skills" and project_root.parent.name == ".agents":
-        return project_root
-    if project_root.name == ".agents":
-        return project_root / "skills"
-    return project_root / ".agents" / "skills"
-
-
-def copy_regular_file_no_follow(source: Path, destination: Path) -> None:
-    flags = os.O_RDONLY
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    try:
-        source_descriptor = os.open(source, flags)
-    except OSError as exc:
-        raise ResourceError(f"无法安全复制普通文件：{source}（{exc}）") from exc
-    try:
-        source_info = os.fstat(source_descriptor)
-        if not stat.S_ISREG(source_info.st_mode):
-            raise ResourceError(f"复制期间源路径不再是普通文件：{source}")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination_descriptor = os.open(
-            destination,
-            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-            stat.S_IMODE(source_info.st_mode),
-        )
-        try:
-            with (
-                os.fdopen(source_descriptor, "rb", closefd=False) as source_stream,
-                os.fdopen(
-                    destination_descriptor, "wb", closefd=False
-                ) as destination_stream,
-            ):
-                shutil.copyfileobj(
-                    source_stream, destination_stream, length=1024 * 1024
-                )
-                destination_stream.flush()
-            os.fchmod(destination_descriptor, stat.S_IMODE(source_info.st_mode))
-        finally:
-            os.close(destination_descriptor)
-        os.utime(
-            destination,
-            ns=(source_info.st_atime_ns, source_info.st_mtime_ns),
-            follow_symlinks=False,
-        )
-    except OSError as exc:
-        raise ResourceError(f"无法复制普通文件：{source}（{exc}）") from exc
-    finally:
-        os.close(source_descriptor)
-
-
-def copy_layer(source: Path, destination: Path, entries: dict[Path, str]) -> None:
-    for relative, kind in sorted(entries.items(), key=lambda item: item[0].as_posix()):
-        source_path = source / relative
-        destination_path = destination / relative
-        if kind == "directory":
-            source_info = lstat_optional(source_path)
-            if source_info is None or not stat.S_ISDIR(source_info.st_mode):
-                raise ResourceError(f"复制期间源路径不再是目录：{source_path}")
-            destination_path.mkdir(parents=True, exist_ok=True)
-            destination_path.chmod(stat.S_IMODE(source_info.st_mode))
-            continue
-        copy_regular_file_no_follow(source_path, destination_path)
+def runtime_lock_root() -> Path:
+    raw = os.environ.get("XDG_RUNTIME_DIR")
+    if raw:
+        root = Path(raw).expanduser() / "ruokee-skills"
+    else:
+        root = user_state_root() / "runtime"
+    root.mkdir(parents=True, exist_ok=True)
+    root.chmod(0o700)
+    return root
 
 
 @contextmanager
-def materialized_variant(
-    resource: Resource, variant: Variant
-) -> Generator[Path, None, None]:
-    if resource.layout_version == 1:
-        yield variant.source
-        return
-    if resource.layout_version != V2_LAYOUT_VERSION or not variant.layers:
-        raise ResourceError(
-            f"不支持的资源布局：{resource.name} layout_version={resource.layout_version}"
-        )
-    base_layer = variant.layers[0]
-    if base_layer.role != "base":
-        raise ResourceError(
-            f"meta-v2 变体缺少首个 base layer：{resource.name}/{variant.name}"
-        )
-    base_entries = scan_layer(base_layer.source, "base")
-    overlay_entries: dict[Path, str] | None = None
-    overlay_layer: Layer | None = None
-    if len(variant.layers) > 2:
-        raise ResourceError(
-            f"meta-v2 第一版只允许单个 overlay：{resource.name}/{variant.name}"
-        )
-    if len(variant.layers) == 2:
-        overlay_layer = variant.layers[1]
-        if overlay_layer.role != "overlay":
-            raise ResourceError(
-                f"meta-v2 第二个 layer 必须是 overlay：{resource.name}/{variant.name}"
-            )
-        overlay_entries = validate_overlay(base_entries, overlay_layer.source)
-    with tempfile.TemporaryDirectory(
-        prefix=f".{resource.name}.{variant.name}.materialized-"
-    ) as temporary:
-        materialized = Path(temporary) / resource.name
-        materialized.mkdir()
-        copy_layer(base_layer.source, materialized, base_entries)
-        if overlay_entries is not None and overlay_layer is not None:
-            copy_layer(overlay_layer.source, materialized, overlay_entries)
-        materialized_skill = materialized / "SKILL.md"
-        if frontmatter_name(materialized_skill) != resource.name:
-            raise ResourceError(
-                f"物化后的 SKILL.md frontmatter name 必须为 {resource.name!r}：{materialized_skill}"
-            )
-        yield materialized
-
-
-def hash_variant(resource: Resource, variant: Variant) -> str:
-    with materialized_variant(resource, variant) as source:
-        return hash_directory(source)
-
-
-def hash_directory(directory: Path) -> str:
-    """计算可复现的目录内容哈希，忽略由本工具写入的元数据。"""
-    digest = hashlib.sha256()
-    for path in sorted(
-        directory.rglob("*"), key=lambda item: item.relative_to(directory).as_posix()
-    ):
-        relative = path.relative_to(directory).as_posix()
-        if relative == METADATA_NAME:
-            continue
-        if path.is_symlink():
-            digest.update(b"L\0")
-            digest.update(relative.encode())
-            digest.update(b"\0")
-            digest.update(os.readlink(path).encode())
-        elif path.is_file():
-            digest.update(b"F\0")
-            digest.update(relative.encode())
-            digest.update(b"\0")
-            with path.open("rb") as stream:
-                while chunk := stream.read(1024 * 1024):
-                    digest.update(chunk)
-        elif path.is_dir():
-            digest.update(b"D\0")
-            digest.update(relative.encode())
-            digest.update(b"\0")
-    return f"sha256:{digest.hexdigest()}"
-
-
-def repository_state(root: Path = REPO_ROOT) -> tuple[str, bool]:
+def operation_lock(scope: str, project: Path | None = None) -> Iterator[None]:
+    if scope == "user":
+        lock_path = user_state_root() / "operation.lock"
+    else:
+        assert project is not None
+        identity = hashlib.sha256(os.fsencode(project)).hexdigest()[:24]
+        lock_path = runtime_lock_root() / f"project-{identity}.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        commit = subprocess.run(
-            ("git", "rev-parse", "HEAD"),
-            cwd=root,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        ).stdout.strip()
-        dirty = bool(
-            subprocess.run(
-                ("git", "status", "--porcelain"),
-                cwd=root,
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            ).stdout.strip()
-        )
-    except (FileNotFoundError, subprocess.SubprocessError) as exc:
-        raise ResourceError(f"无法读取仓库版本：{exc}") from exc
-    return commit, dirty
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
 
 
-def read_metadata(destination: Path) -> dict[str, Any] | None:
-    metadata_path = destination / METADATA_NAME
-    if not metadata_path.is_file():
+def run_command(argv: tuple[str, ...], *, cwd: Path = REPO_ROOT) -> str:
+    try:
+        result = subprocess.run(argv, cwd=cwd, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=COMMAND_TIMEOUT_SECONDS, env=os.environ.copy())
+    except FileNotFoundError as exc:
+        raise InstallError(f"未找到宿主命令：{argv[0]}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise InstallError(f"宿主命令超过 {COMMAND_TIMEOUT_SECONDS} 秒未完成：{' '.join(argv)}") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.strip() or exc.stdout.strip() or f"exit {exc.returncode}"
+        raise InstallError(f"宿主命令失败：{' '.join(argv)}\n{detail}") from exc
+    return result.stdout
+
+
+def run_json_value(argv: tuple[str, ...]) -> Any:
+    output = run_command(argv)
+    try:
+        return json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise InstallError(f"宿主命令没有返回预期 JSON：{' '.join(argv)}") from exc
+
+
+def run_json_command(argv: tuple[str, ...]) -> dict[str, Any]:
+    value = run_json_value(argv)
+    if not isinstance(value, dict):
+        raise InstallError(f"宿主命令返回的 JSON 根不是 object：{' '.join(argv)}")
+    return value
+
+
+def parse_version(host: str, output: str) -> tuple[int, int, int]:
+    if host == "codex":
+        match = re.fullmatch(r"codex-cli (\d+)\.(\d+)\.(\d+)\s*", output)
+    elif host == "claude":
+        match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+) \(Claude Code\)\s*", output)
+    else:
+        match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)\s*", output)
+    if match is None:
+        raise InstallError(f"无法识别 {host} 版本输出：{output.strip()!r}")
+    return tuple(int(part) for part in match.groups())
+
+
+def check_host_versions(hosts: tuple[str, ...]) -> None:
+    for host in hosts:
+        output = run_command(HOST_VERSION_COMMANDS[host])
+        current = parse_version(host, output)
+        expected = SUPPORTED_HOST_VERSIONS[host]
+        if current != expected:
+            current_text = ".".join(str(part) for part in current)
+            expected_text = ".".join(str(part) for part in expected)
+            raise InstallError(f"尚未验证 {host} {current_text} 的安装输出；当前适配器只支持 {expected_text}")
+
+
+def user_state_root() -> Path:
+    raw = os.environ.get("XDG_STATE_HOME")
+    base = Path(raw).expanduser() if raw else Path.home() / ".local" / "state"
+    return base / "ruokee-skills"
+
+
+def user_state_path() -> Path:
+    return user_state_root() / "installs.json"
+
+
+def user_data_root() -> Path:
+    raw = os.environ.get("XDG_DATA_HOME")
+    base = Path(raw).expanduser() if raw else Path.home() / ".local" / "share"
+    return base / "ruokee-skills"
+
+
+def validate_user_entry(key: str, value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != USER_STATE_FIELDS:
+        raise InstallError(f"用户状态条目 {key!r} 字段不完整或包含未知字段")
+    host, separator, plugin = key.partition(":")
+    if not separator or value.get("host") != host or value.get("plugin") != plugin or host not in HOSTS:
+        raise InstallError(f"用户状态条目 {key!r} 的身份字段无效")
+    for field in ("variant", "source_commit", "installation_id", "base_version", "updated_at"):
+        if not isinstance(value.get(field), str) or not value[field]:
+            raise InstallError(f"用户状态条目 {key!r} 的 {field} 无效")
+    for field in ("baseline_hash", "managed_hash"):
+        if not isinstance(value.get(field), str) or HASH_PATTERN.fullmatch(value[field]) is None:
+            raise InstallError(f"用户状态条目 {key!r} 的 {field} 无效")
+    return value
+
+
+def read_user_state() -> dict[str, Any]:
+    path = user_state_path()
+    if not path.exists():
+        return {"schema_version": USER_STATE_SCHEMA, "installs": {}}
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise InstallError(f"无法读取用户安装状态 {path}：{exc}") from exc
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"schema_version", "installs"}
+        or type(document.get("schema_version")) is not int
+        or document.get("schema_version") != USER_STATE_SCHEMA
+        or not isinstance(document.get("installs"), dict)
+    ):
+        raise InstallError(f"用户安装状态 schema 无效：{path}")
+    for key, value in document["installs"].items():
+        validate_user_entry(key, value)
+    return document
+
+
+def write_user_state(document: dict[str, Any]) -> None:
+    path = user_state_path()
+    installs = document["installs"]
+    if not installs:
+        if path.exists():
+            path.unlink()
+            fsync_directory(path.parent)
+        return
+    write_json_atomic(path, document, mode=0o600)
+
+
+def state_key(host: str, plugin: str) -> str:
+    return f"{host}:{plugin}"
+
+
+def codex_home() -> Path:
+    raw = os.environ.get("CODEX_HOME")
+    return (Path(raw).expanduser() if raw else Path.home() / ".codex").resolve()
+
+
+def claude_home() -> Path:
+    raw = os.environ.get("CLAUDE_CONFIG_DIR")
+    return (Path(raw).expanduser() if raw else Path.home() / ".claude").resolve()
+
+
+def pi_home() -> Path:
+    raw = os.environ.get("PI_CODING_AGENT_DIR")
+    return (Path(raw).expanduser() if raw else Path.home() / ".pi" / "agent").resolve()
+
+
+def path_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def validate_package_root(host: str, plugin: Plugin, root: Path, version: str, expected_parent: Path) -> NativeInstall:
+    info = root.lstat() if root.exists() or root.is_symlink() else None
+    if info is None or not stat.S_ISDIR(info.st_mode):
+        raise InstallError(f"{host} 报告的插件目录不存在或不是普通目录：{root}")
+    if not path_within(root, expected_parent):
+        raise InstallError(f"{host} 插件目录越过已验证 cache/package 根：{root}")
+    manifest = read_json_object(root / ".codex-plugin" / "plugin.json", f"{host} 已安装 Codex manifest")
+    manifest_version = manifest.get("version")
+    version_matches = manifest_version == version if host != "claude" else isinstance(manifest_version, str) and manifest_version.split("+", 1)[0] == version
+    if manifest.get("name") != plugin.name or not version_matches:
+        raise InstallError(f"{host} 已安装目录的 manifest 身份或版本不匹配：{root}")
+    skill_root = root / "skills" / plugin.name
+    skill_info = skill_root.lstat() if skill_root.exists() or skill_root.is_symlink() else None
+    if skill_info is None or not stat.S_ISDIR(skill_info.st_mode):
+        raise InstallError(f"{host} 已安装插件缺少 Skill 目录：{skill_root}")
+    return NativeInstall(host, plugin.name, root, skill_root, version)
+
+
+def validate_catalog_source(plugin: Plugin, entry: dict[str, Any]) -> None:
+    source = entry.get("source")
+    if not isinstance(source, dict) or source.get("source") != "local":
+        raise InstallError(f"Codex catalog 中 {plugin.name} 不是本地 source")
+    raw_path = source.get("path")
+    if not isinstance(raw_path, str) or Path(raw_path).resolve() != plugin.package_root.resolve():
+        raise InstallError(f"Codex catalog 中 {plugin.name} 指向错误 package root：{raw_path!r}")
+    marketplace = entry.get("marketplaceSource")
+    if not isinstance(marketplace, dict) or marketplace.get("sourceType") != "local" or Path(str(marketplace.get("source"))).resolve() != REPO_ROOT.resolve():
+        raise InstallError(f"Codex catalog 中 {plugin.name} 的 marketplace source 不是当前仓库")
+
+
+def codex_catalog() -> dict[str, Any]:
+    return run_json_command(("codex", "plugin", "list", "--available", "--json"))
+
+
+def codex_marketplace_registered() -> bool:
+    document = run_json_command(("codex", "plugin", "marketplace", "list", "--json"))
+    entries = document.get("marketplaces")
+    if not isinstance(entries, list) or not all(isinstance(item, dict) for item in entries):
+        raise InstallError("Codex marketplace list --json 没有返回有效 marketplaces 数组")
+    matches = [item for item in entries if item.get("name") == MARKETPLACE_NAME]
+    if len(matches) > 1:
+        raise InstallError(f"Codex marketplace 名称重复：{MARKETPLACE_NAME}")
+    if not matches:
+        return False
+    entry = matches[0]
+    source = entry.get("marketplaceSource")
+    raw_root = entry.get("root")
+    raw_source = source.get("source") if isinstance(source, dict) else None
+    if (
+        not isinstance(source, dict)
+        or source.get("sourceType") != "local"
+        or not isinstance(raw_source, str)
+        or Path(raw_source).resolve() != REPO_ROOT.resolve()
+        or not isinstance(raw_root, str)
+        or Path(raw_root).resolve() != REPO_ROOT.resolve()
+    ):
+        raise InstallError(f"Codex marketplace {MARKETPLACE_NAME} 没有指向当前仓库")
+    return True
+
+
+def codex_entry(plugin: Plugin, *, installed: bool | None = None) -> dict[str, Any] | None:
+    document = codex_catalog()
+    entries: list[dict[str, Any]] = []
+    if installed is not False:
+        entries.extend(item for item in document.get("installed", []) if isinstance(item, dict))
+    if installed is not True:
+        entries.extend(item for item in document.get("available", []) if isinstance(item, dict))
+    matches = [item for item in entries if item.get("pluginId") == f"{plugin.name}@{MARKETPLACE_NAME}"]
+    if len(matches) > 1:
+        raise InstallError(f"Codex catalog 中 {plugin.name} 身份重复")
+    if not matches:
+        return None
+    validate_catalog_source(plugin, matches[0])
+    return matches[0]
+
+
+def codex_status(plugin: Plugin) -> NativeInstall | None:
+    registered = codex_marketplace_registered()
+    entry = codex_entry(plugin, installed=True)
+    if entry is None:
+        if registered and codex_entry(plugin, installed=False) is None:
+            raise InstallError(f"Codex marketplace 中找不到插件 {plugin.name}")
+        return None
+    if not registered:
+        raise InstallError(f"Codex 已安装 {plugin.name}，但 {MARKETPLACE_NAME} marketplace 未登记")
+    version = entry.get("version")
+    if not isinstance(version, str) or not version:
+        raise InstallError(f"Codex 没有报告 {plugin.name} 的已安装版本")
+    cache_parent = codex_home() / "plugins" / "cache" / MARKETPLACE_NAME / plugin.name
+    root = cache_parent / version
+    install = validate_package_root("codex", plugin, root, version, cache_parent)
+    return NativeInstall(install.host, install.plugin, install.root, install.skill_root, install.version, bool(entry.get("enabled", False)))
+
+
+def ensure_codex_marketplace(plugin: Plugin) -> None:
+    if not codex_marketplace_registered():
+        run_json_command(("codex", "plugin", "marketplace", "add", str(REPO_ROOT), "--json"))
+    if not codex_marketplace_registered():
+        raise InstallError("Codex 注册本地 marketplace 后没有报告当前仓库")
+    if codex_entry(plugin, installed=False) is None and codex_entry(plugin, installed=True) is None:
+        raise InstallError("Codex 注册本地 marketplace 后仍找不到目标插件")
+
+
+def codex_reinstall(plugin: Plugin) -> NativeInstall:
+    ensure_codex_marketplace(plugin)
+    result = run_json_command(("codex", "plugin", "add", f"{plugin.name}@{MARKETPLACE_NAME}", "--json"))
+    version = result.get("version")
+    raw_root = result.get("installedPath")
+    if not isinstance(version, str) or not isinstance(raw_root, str):
+        raise InstallError(f"Codex 安装 {plugin.name} 后未返回 version/installedPath")
+    cache_parent = codex_home() / "plugins" / "cache" / MARKETPLACE_NAME / plugin.name
+    reported = validate_package_root("codex", plugin, Path(raw_root), version, cache_parent)
+    installed = codex_status(plugin)
+    if installed is None or installed.root.resolve() != reported.root.resolve() or installed.version != reported.version:
+        raise InstallError(f"Codex 安装 {plugin.name} 后的 catalog 与返回路径不一致")
+    return installed
+
+
+def claude_catalog() -> dict[str, Any]:
+    return run_json_command(("claude", "plugin", "list", "--available", "--json"))
+
+
+def claude_marketplace_registered() -> bool:
+    entries = run_json_value(("claude", "plugin", "marketplace", "list", "--json"))
+    if not isinstance(entries, list) or not all(isinstance(item, dict) for item in entries):
+        raise InstallError("Claude Code marketplace list --json 没有返回数组")
+    matches = [item for item in entries if item.get("name") == MARKETPLACE_NAME]
+    if len(matches) > 1:
+        raise InstallError(f"Claude Code marketplace 名称重复：{MARKETPLACE_NAME}")
+    if not matches:
+        return False
+    entry = matches[0]
+    raw_path = entry.get("path")
+    if entry.get("source") != "directory" or not isinstance(raw_path, str) or Path(raw_path).resolve() != REPO_ROOT.resolve():
+        raise InstallError(f"Claude Code marketplace {MARKETPLACE_NAME} 没有指向当前仓库")
+    return True
+
+
+def claude_catalog_has(plugin: Plugin) -> bool:
+    document = claude_catalog()
+    identifier = f"{plugin.name}@{MARKETPLACE_NAME}"
+    return any(isinstance(item, dict) and (item.get("pluginId") == identifier or item.get("id") == identifier) for group in ("installed", "available") for item in document.get(group, []))
+
+
+def ensure_claude_marketplace(plugin: Plugin) -> None:
+    registered = claude_marketplace_registered()
+    if not registered:
+        run_command(("claude", "plugin", "marketplace", "add", str(REPO_ROOT), "--scope", "user"))
+    elif not claude_catalog_has(plugin):
+        run_command(("claude", "plugin", "marketplace", "update", MARKETPLACE_NAME))
+    if not claude_marketplace_registered():
+        raise InstallError("Claude Code 注册本地 marketplace 后没有报告当前仓库")
+    if not claude_catalog_has(plugin):
+        raise InstallError("Claude Code 注册本地 marketplace 后仍找不到目标插件")
+
+
+def claude_status(plugin: Plugin) -> NativeInstall | None:
+    registered = claude_marketplace_registered()
+    document = run_json_value(("claude", "plugin", "list", "--json"))
+    if not isinstance(document, list):
+        raise InstallError("Claude Code plugin list --json 没有返回数组")
+    identifier = f"{plugin.name}@{MARKETPLACE_NAME}"
+    matches = [item for item in document if isinstance(item, dict) and item.get("id") == identifier and item.get("scope") == "user"]
+    if len(matches) > 1:
+        raise InstallError(f"Claude Code 用户级安装中 {plugin.name} 身份重复")
+    if not matches:
+        if registered and not claude_catalog_has(plugin):
+            raise InstallError(f"Claude Code marketplace 中找不到插件 {plugin.name}")
+        return None
+    if not registered:
+        raise InstallError(f"Claude Code 已安装 {plugin.name}，但 {MARKETPLACE_NAME} marketplace 未登记")
+    entry = matches[0]
+    version = entry.get("version")
+    raw_root = entry.get("installPath")
+    if not isinstance(version, str) or not isinstance(raw_root, str):
+        raise InstallError(f"Claude Code 没有报告 {plugin.name} 的 version/installPath")
+    cache_parent = claude_home() / "plugins" / "cache" / MARKETPLACE_NAME / plugin.name
+    install = validate_package_root("claude", plugin, Path(raw_root), version, cache_parent)
+    return NativeInstall(install.host, install.plugin, install.root, install.skill_root, install.version, bool(entry.get("enabled", False)))
+
+
+def claude_reinstall(plugin: Plugin, current: NativeInstall | None) -> NativeInstall:
+    ensure_claude_marketplace(plugin)
+    if current is None:
+        run_command(("claude", "plugin", "install", f"{plugin.name}@{MARKETPLACE_NAME}", "--scope", "user"))
+    else:
+        run_command(("claude", "plugin", "marketplace", "update", MARKETPLACE_NAME))
+        run_command(("claude", "plugin", "update", f"{plugin.name}@{MARKETPLACE_NAME}", "--scope", "user"))
+    installed = claude_status(plugin)
+    if installed is None:
+        raise InstallError(f"Claude Code 操作成功后仍找不到用户级插件 {plugin.name}")
+    return installed
+
+
+def pi_settings_path() -> Path:
+    return pi_home() / "settings.json"
+
+
+def pi_package_sources() -> list[tuple[str, Path]]:
+    run_command(("pi", "list", "--no-approve"))
+    path = pi_settings_path()
+    if not path.exists():
+        return []
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise InstallError(f"无法读取 Pi settings {path}：{exc}") from exc
+    packages = document.get("packages", [])
+    if not isinstance(packages, list):
+        raise InstallError(f"Pi settings 的 packages 不是数组：{path}")
+    result: list[tuple[str, Path]] = []
+    for item in packages:
+        raw = item if isinstance(item, str) else item.get("source") if isinstance(item, dict) else None
+        if not isinstance(raw, str) or raw.startswith(("npm:", "git:", "http://", "https://", "ssh://")):
+            continue
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            candidate = path.parent / candidate
+        result.append((raw, candidate.resolve(strict=False)))
+    return result
+
+
+def managed_pi_package(plugin: Plugin) -> Path:
+    return user_data_root() / "packages" / plugin.name
+
+
+def pi_local_plugin_name(root: Path) -> str | None:
+    manifest = root / ".codex-plugin" / "plugin.json"
+    info = manifest.lstat() if manifest.exists() or manifest.is_symlink() else None
+    if info is None or not stat.S_ISREG(info.st_mode):
         return None
     try:
-        data = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ResourceError(f"安装元数据损坏：{metadata_path}（{exc}）") from exc
-    if (
-        data.get("schema_version") != SCHEMA_VERSION
-        or data.get("manager") != MANAGER_NAME
-    ):
-        raise ResourceError(f"不支持的安装元数据：{metadata_path}")
-    return data
+        value = read_json_object(manifest, "Pi 本地 Package Codex manifest")
+    except RepositoryError:
+        return None
+    name = value.get("name")
+    return name if isinstance(name, str) else None
 
 
-def metadata_belongs_to(metadata: dict[str, Any], resource: Resource) -> bool:
-    resource_data = metadata.get("resource", {})
-    return (
-        resource_data.get("name") == resource.name
-        and resource_data.get("type") == resource.kind
-    )
-
-
-def choose_variant(
-    resource: Resource, requested: str | None, installed: str | None = None
-) -> Variant:
-    if requested:
-        if requested not in resource.variants:
-            choices = "、".join(resource.variants)
-            raise ResourceError(
-                f"{resource.name} 没有变体 {requested!r}；可选：{choices}"
-            )
-        return resource.variants[requested]
-    if installed in resource.variants:
-        return resource.variants[installed]  # type: ignore[index]
-    if resource.layout_version == V2_LAYOUT_VERSION:
-        if resource.default_variant not in resource.variants:
-            raise ResourceError(f"{resource.name} 的 meta default 变体不存在")
-        return resource.variants[resource.default_variant]  # type: ignore[index]
-    if len(resource.variants) == 1:
-        return next(iter(resource.variants.values()))
-    for preferred in ("default", "en"):
-        if preferred in resource.variants:
-            return resource.variants[preferred]
-    return next(iter(resource.variants.values()))
-
-
-def metadata_for(
-    resource: Resource, variant: Variant, target: str, content_hash: str
-) -> dict[str, Any]:
-    commit, dirty = repository_state()
-    source: dict[str, Any] = {
-        "variant": variant.name,
-        "path": variant.source.relative_to(REPO_ROOT).as_posix(),
-        "repository_commit": commit,
-        "repository_dirty": dirty,
-        "content_hash": content_hash,
+def pi_status(plugin: Plugin) -> NativeInstall | None:
+    expected = {
+        plugin.package_root.resolve(): "default",
+        managed_pi_package(plugin).resolve(): "managed",
     }
-    if resource.layout_version == V2_LAYOUT_VERSION:
-        source["path"] = resource.workspace.relative_to(REPO_ROOT).as_posix()
-        source["layout_version"] = V2_LAYOUT_VERSION
-        source["layers"] = [
-            {
-                "role": layer.role,
-                "path": layer.source.relative_to(REPO_ROOT).as_posix(),
-            }
-            for layer in variant.layers
-        ]
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "manager": MANAGER_NAME,
-        "resource": {
-            "name": resource.name,
-            "type": resource.kind,
-            "domain": resource.domain,
-        },
-        "source": source,
-        "installation": {
-            "target": target,
-            "installed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        },
-    }
+    sources = pi_package_sources()
+    foreign = [(raw, resolved) for raw, resolved in sources if resolved not in expected and pi_local_plugin_name(resolved) == plugin.name]
+    if foreign:
+        paths = ", ".join(str(item[1]) for item in foreign)
+        raise InstallError(f"Pi 已登记来自其他本地 source 的同名插件 {plugin.name}：{paths}")
+    matches = [(raw, resolved, expected[resolved]) for raw, resolved in sources if resolved in expected]
+    if len(matches) > 1:
+        paths = ", ".join(str(item[1]) for item in matches)
+        raise InstallError(f"Pi 同时登记了 {plugin.name} 的多个活动本地 source：{paths}")
+    if not matches:
+        return None
+    raw, root, _ = matches[0]
+    if not root.exists():
+        raise InstallError(f"Pi 登记的 {plugin.name} 本地 Package 不存在：{root}")
+    manifest = read_json_object(root / ".codex-plugin" / "plugin.json", "Pi Package Codex manifest")
+    version = manifest.get("version")
+    if manifest.get("name") != plugin.name or not isinstance(version, str):
+        raise InstallError(f"Pi Package 身份无效：{root}")
+    allowed_parent = plugin.workspace if root == plugin.package_root.resolve() else user_data_root() / "packages"
+    install = validate_package_root("pi", plugin, root, version, allowed_parent)
+    return NativeInstall(install.host, install.plugin, install.root, install.skill_root, install.version, True, raw)
 
 
-def atomic_install(source: Path, destination: Path, metadata: dict[str, Any]) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.is_symlink():
-        raise ResourceError(f"拒绝覆盖符号链接：{destination}")
-    staging = Path(
-        tempfile.mkdtemp(prefix=f".{destination.name}.install-", dir=destination.parent)
-    )
-    backup = destination.parent / f".{destination.name}.backup-{os.getpid()}"
-    try:
-        shutil.copytree(source, staging, dirs_exist_ok=True, symlinks=True)
-        (staging / METADATA_NAME).write_text(
-            json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
-        if destination.exists():
-            if backup.exists():
-                raise ResourceError(f"临时备份路径已存在：{backup}")
-            destination.rename(backup)
-        staging.rename(destination)
-        if backup.exists():
-            if backup.is_dir() and not backup.is_symlink():
-                shutil.rmtree(backup)
-            else:
-                backup.unlink()
-    except Exception:
-        if backup.exists() and not destination.exists():
-            backup.rename(destination)
-        raise
-    finally:
-        if staging.exists():
-            shutil.rmtree(staging)
+def pi_switch_source(plugin: Plugin, target: Path, current: NativeInstall | None) -> NativeInstall:
+    target = target.resolve()
+    sources = pi_package_sources()
+    target_raw = next((raw for raw, resolved in sources if resolved == target), None)
+    if target_raw is None:
+        run_command(("pi", "install", str(target), "--no-approve"))
+    if current is not None and current.root.resolve() != target and current.source_arg is not None:
+        run_command(("pi", "remove", str(current.root.resolve()), "--no-approve"))
+    installed = pi_status(plugin)
+    if installed is None or installed.root.resolve() != target:
+        raise InstallError(f"Pi 切换 {plugin.name} source 后未解析到预期 Package：{target}")
+    return installed
 
 
-def install_resource(
-    resource: Resource, variant: Variant, target: str, root: Path
-) -> None:
-    with materialized_variant(resource, variant) as source:
-        source_hash = hash_directory(source)
-        metadata = metadata_for(resource, variant, target, source_hash)
-        atomic_install(source, root / resource.name, metadata)
-
-
-def status_for(resource: Resource, target: str, root: Path) -> InstallationStatus:
-    destination = root / resource.name
-    if not destination.exists():
-        return InstallationStatus("not_installed")
-    metadata = read_metadata(destination)
-    if metadata is None:
-        return InstallationStatus("unmanaged", detail="目标目录没有管理元数据")
-    if not metadata_belongs_to(metadata, resource):
-        return InstallationStatus("unmanaged", detail="元数据属于其他资源")
-    variant_name = metadata.get("source", {}).get("variant")
-    if variant_name not in resource.variants:
-        return InstallationStatus("source_missing", variant=str(variant_name))
-    variant = resource.variants[variant_name]
-    source_hash = hash_variant(resource, variant)
-    installed_hash = hash_directory(destination)
-    recorded_hash = metadata.get("source", {}).get("content_hash")
-    source_changed = source_hash != recorded_hash
-    local_changed = installed_hash != recorded_hash
-    if source_hash == installed_hash:
-        state = "current"
-    elif source_changed and local_changed:
-        state = "update_and_modified"
-    elif source_changed:
-        state = "update_available"
+def native_status(host: str, plugin: Plugin) -> NativeInstall | None:
+    if host == "codex":
+        installed = codex_status(plugin)
+    elif host == "claude":
+        installed = claude_status(plugin)
     else:
-        state = "modified"
-    return InstallationStatus(
-        state, variant_name, source_hash, installed_hash, recorded_hash
-    )
+        installed = pi_status(plugin)
+    if installed is not None and not installed.enabled:
+        raise InstallError(f"{host}:{plugin.name} 已安装但未启用")
+    return installed
 
 
-def require_resources(
-    catalog: dict[str, Resource], names: Iterable[str]
-) -> list[Resource]:
-    selected = []
-    for name in names:
-        if name not in catalog:
-            raise ResourceError(f"仓库中不存在资源：{name}")
-        selected.append(catalog[name])
-    return selected
+def validate_task_runtime(host: str, plugin: Plugin, installed: NativeInstall | None) -> None:
+    if plugin.name != "task":
+        return
+    if installed is None:
+        raise InstallError(f"项目 local Task 需要先安装 {host} 用户级 runtime")
+    if not installed.enabled:
+        raise InstallError(f"项目 local Task 需要先启用 {host} 用户级 runtime")
+    launcher = installed.root / "bin" / "task-core"
+    binaries = list(installed.root.glob("runtime/*/task-core.dist/task-core.bin"))
+    if not launcher.is_file() or not os.access(launcher, os.X_OK) or len(binaries) != 1 or not binaries[0].is_file() or not os.access(binaries[0], os.X_OK):
+        raise InstallError(f"{host} 用户级 Task runtime 不完整：{installed.root}")
 
 
-def target_options(function):
-    function = click.option(
-        "--root",
-        type=click.Path(path_type=Path, file_okay=False),
-        help="项目根目录；默认使用当前工作目录。",
-    )(function)
-    function = click.option(
-        "--target", type=click.Choice(TARGETS), help="全局安装目标。"
-    )(function)
-    function = click.option(
-        "--global",
-        "global_install",
-        is_flag=True,
-        help="安装到 --target 对应的全局目录。",
-    )(function)
-    return function
+def validate_task_source_runtime(plugin: Plugin) -> None:
+    if plugin.name != "task":
+        return
+    launcher = plugin.package_root / "bin" / "task-core"
+    binaries = list(plugin.package_root.glob("runtime/*/task-core.dist/task-core.bin"))
+    if not launcher.is_file() or not os.access(launcher, os.X_OK) or len(binaries) != 1 or not os.access(binaries[0], os.X_OK):
+        raise InstallError(f"Task package runtime 尚未构建：{plugin.package_root}")
 
 
-def global_target_options(function):
-    function = click.option(
-        "--root",
-        type=click.Path(path_type=Path, file_okay=False),
-        help="项目根目录；默认使用当前工作目录。",
-    )(function)
-    function = click.option(
-        "--target",
-        type=click.Choice(TARGETS),
-        default="codex",
-        show_default=True,
-        help="全局安装目标。",
-    )(function)
-    function = click.option(
-        "--global",
-        "global_install",
-        is_flag=True,
-        help="安装到 --target 对应的全局目录。",
-    )(function)
-    return function
+def cleanup_staging(destination: Path) -> None:
+    parent = destination.parent
+    staging = sorted(parent.glob(f".{destination.name}.ruokee-skills-staging-*"))
+    backups = sorted(parent.glob(f".{destination.name}.ruokee-skills-backup-*"))
+    for child in staging:
+        remove_path(child)
+    destination_exists = destination.exists() or destination.is_symlink()
+    if not destination_exists and len(backups) == 1:
+        os.replace(backups[0], destination)
+        fsync_directory(parent)
+        return
+    if not destination_exists and backups:
+        raise InstallError(f"发现多个无法判定的中断备份，拒绝清理：{', '.join(str(path) for path in backups)}")
+    for child in backups:
+        remove_path(child)
 
 
-def effective_target_options(
-    target: str | None,
-    root: Path | None,
-    global_install: bool,
-) -> tuple[str, Path | None, bool]:
-    context = click.get_current_context()
-    if context is None:
-        raise ResourceError("无法读取 CLI 上下文")
-    root_params = context.find_root().params
-    effective_target = target or root_params.get("target") or "codex"
-    effective_root = root if root is not None else root_params.get("root")
-    effective_global = global_install or bool(root_params.get("global_install"))
-    if effective_global and effective_root is not None:
-        raise ResourceError("--global 与 --root 不能同时使用")
-    return effective_target, effective_root, effective_global
+def atomic_replace_directory(destination: Path, builder: Callable[[Path], None]) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    cleanup_staging(destination)
+    stage = Path(tempfile.mkdtemp(prefix=f".{destination.name}.ruokee-skills-staging-", dir=destination.parent))
+    backup: Path | None = None
+    try:
+        builder(stage)
+        if destination.exists() or destination.is_symlink():
+            backup = Path(tempfile.mkdtemp(prefix=f".{destination.name}.ruokee-skills-backup-", dir=destination.parent))
+            backup.rmdir()
+            os.replace(destination, backup)
+        os.replace(stage, destination)
+        fsync_directory(destination.parent)
+    except BaseException:
+        if stage.exists():
+            remove_path(stage)
+        if backup is not None and backup.exists() and not destination.exists():
+            os.replace(backup, destination)
+        raise
+    if backup is not None and backup.exists():
+        remove_path(backup)
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
-@click.version_option("1", prog_name="resource-installer")
-@global_target_options
-def cli(target: str, root: Path | None, global_install: bool) -> None:
-    """[bold]管理当前仓库中的可安装资源。[/bold]
+def install_skill(destination: Path, plugin: Plugin, variant: str, metadata: dict[str, Any] | None = None) -> None:
+    def build(stage: Path) -> None:
+        populate_materialized_skill(plugin, variant, stage)
+        if metadata is not None:
+            target = stage / PROJECT_INSTALL_METADATA
+            target.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            target.chmod(0o644)
 
-    当前支持 Skill，并为后续 Package、Plugin 等资源保留统一模型。
-    """
+    atomic_replace_directory(destination, build)
 
 
-@cli.command("list")
-@target_options
-def list_resources(target: str | None, root: Path | None, global_install: bool) -> None:
-    """列出仓库资源及其安装状态。"""
-    target, root, global_install = effective_target_options(
-        target, root, global_install
-    )
-    catalog = discover_resources()
-    resolved_root = destination_root(target, root, global_install)
-    table = Table(
-        title=f"仓库资源 · {target} → {resolved_root}", header_style="bold cyan"
-    )
-    table.add_column("资源")
-    table.add_column("类型")
-    table.add_column("来源")
-    table.add_column("变体")
-    table.add_column("状态")
-    labels = {
-        "not_installed": "[dim]未安装[/dim]",
-        "current": "[green]已是最新[/green]",
-        "update_available": "[yellow]可更新[/yellow]",
-        "modified": "[magenta]本地已修改[/magenta]",
-        "update_and_modified": "[red]可更新 / 本地已修改[/red]",
-        "unmanaged": "[red]未受管理[/red]",
-        "source_missing": "[red]源变体不存在[/red]",
+def copy_package(source: Path, destination: Path) -> None:
+    entries = scan_tree(source, exclude_install_metadata=False)
+    for relative, entry in entries.items():
+        target = destination / relative
+        if entry.kind == "directory":
+            target.mkdir(parents=True, exist_ok=True)
+            target.chmod(entry.mode)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(read_regular_file(source / relative))
+            target.chmod(entry.mode)
+
+
+def build_managed_pi_package(plugin: Plugin, variant: str) -> NativeInstall:
+    destination = managed_pi_package(plugin)
+
+    def build(stage: Path) -> None:
+        copy_package(plugin.package_root, stage)
+        skill = stage / "skills" / plugin.name
+        remove_path(skill)
+        skill.mkdir(parents=True)
+        populate_materialized_skill(plugin, variant, skill)
+
+    atomic_replace_directory(destination, build)
+    manifest = read_json_object(destination / ".codex-plugin" / "plugin.json", "受管 Pi Package manifest")
+    version = manifest.get("version")
+    if not isinstance(version, str):
+        raise InstallError(f"受管 Pi Package 缺少版本：{destination}")
+    return NativeInstall("pi", plugin.name, destination, destination / "skills" / plugin.name, version)
+
+
+def baseline_hash(plugin: Plugin, host: str) -> str:
+    if host == "pi":
+        return directory_hash(plugin.package_root, exclude_install_metadata=False)
+    return materialized_hash(plugin, plugin.default_variant)
+
+
+def current_hash(installed: NativeInstall, host: str) -> str:
+    target = installed.root if host == "pi" else installed.skill_root
+    return directory_hash(target, exclude_install_metadata=False)
+
+
+def verify_drift(plugin: Plugin, host: str, installed: NativeInstall | None, state: dict[str, Any] | None, baseline: str, force: bool) -> None:
+    if installed is None:
+        return
+    current = current_hash(installed, host)
+    if state is not None:
+        if current in (state["managed_hash"], baseline):
+            return
+        if force:
+            return
+        raise InstallError(f"{host}:{plugin.name} 的已托管内容发生漂移；使用 --force 仅可覆盖该已验证安装")
+    if current == baseline:
+        return
+    if force:
+        return
+    raise InstallError(f"{host}:{plugin.name} 已安装 Skill/Package 不是当前 default 基线；请检查修改或使用 --force 原生恢复")
+
+
+def installation_id(host: str, plugin: Plugin) -> str:
+    return f"{plugin.name}@{MARKETPLACE_NAME}" if host in ("codex", "claude") else f"{plugin.name}@local"
+
+
+def user_state_entry(host: str, plugin: Plugin, variant: str, baseline: str, managed: str, commit: str) -> dict[str, Any]:
+    return {
+        "host": host,
+        "plugin": plugin.name,
+        "variant": variant,
+        "source_commit": commit,
+        "installation_id": installation_id(host, plugin),
+        "base_version": base_version(plugin),
+        "baseline_hash": baseline,
+        "managed_hash": managed,
+        "updated_at": now_rfc3339(),
     }
-    for resource in catalog.values():
-        status = status_for(resource, target, resolved_root)
-        variants = ", ".join(resource.variants)
-        table.add_row(
-            resource.name,
-            resource.kind,
-            resource.domain,
-            variants,
-            labels[status.state],
-        )
-    console.print(table)
+
+
+def refresh_native(host: str, plugin: Plugin, current: NativeInstall | None) -> NativeInstall:
+    validate_task_source_runtime(plugin)
+    if host == "codex":
+        return codex_reinstall(plugin)
+    if host == "claude":
+        return claude_reinstall(plugin, current)
+    raise AssertionError(host)
+
+
+def apply_user_variant(host: str, plugin: Plugin, variant: str, current: NativeInstall | None, *, refresh: bool) -> NativeInstall:
+    if host in ("codex", "claude"):
+        installed = refresh_native(host, plugin, current) if refresh or current is None else current
+        if not installed.enabled:
+            raise InstallError(f"{host}:{plugin.name} 已安装但未启用")
+        install_skill(installed.skill_root, plugin, variant)
+        expected = materialized_hash(plugin, variant)
+        if directory_hash(installed.skill_root) != expected:
+            raise InstallError(f"{host}:{plugin.name} 物化结果校验失败")
+        return installed
+
+    validate_task_source_runtime(plugin)
+    if variant == plugin.default_variant:
+        installed = pi_switch_source(plugin, plugin.package_root, current)
+    else:
+        managed = build_managed_pi_package(plugin, variant)
+        installed = pi_switch_source(plugin, managed.root, current)
+    return installed
+
+
+def normalized_hosts(raw_hosts: tuple[str, ...]) -> tuple[str, ...]:
+    selected = set(raw_hosts or HOSTS)
+    return tuple(host for host in HOSTS if host in selected)
+
+
+def require_plugins(names: tuple[str, ...], all_plugins: dict[str, Plugin]) -> list[Plugin]:
+    missing = sorted(set(names) - set(all_plugins))
+    if missing:
+        raise InstallError(f"未知插件：{', '.join(missing)}")
+    return [all_plugins[name] for name in names]
+
+
+def variant_for(plugin: Plugin, requested: str | None) -> str:
+    variant = requested or plugin.default_variant
+    plugin.source_for_variant(variant)
+    return variant
+
+
+def repository_status() -> str:
+    try:
+        return subprocess.run(("git", "-C", str(REPO_ROOT), "status", "--porcelain"), check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise InstallError(f"无法读取目标仓库状态：{exc}") from exc
+
+
+def setup_user(plugins: list[Plugin], hosts: tuple[str, ...], requested_variant: str | None, force: bool) -> None:
+    check_host_versions(hosts)
+    before_status = repository_status()
+    with operation_lock("user"):
+        state = read_user_state()
+        for plugin in plugins:
+            validate_task_source_runtime(plugin)
+        preflight: dict[tuple[str, str], tuple[str, str, NativeInstall | None, dict[str, Any] | None]] = {}
+        for host in hosts:
+            for plugin in plugins:
+                variant = variant_for(plugin, requested_variant)
+                baseline = baseline_hash(plugin, host)
+                installed = native_status(host, plugin)
+                entry = state["installs"].get(state_key(host, plugin.name))
+                verify_drift(plugin, host, installed, entry, baseline, force)
+                preflight[(host, plugin.name)] = (variant, baseline, installed, entry)
+
+        commit, _ = repository_state()
+        for host in hosts:
+            for plugin in plugins:
+                variant, baseline, installed, entry = preflight[(host, plugin.name)]
+                needs_refresh = installed is None or installed.version.split("+", 1)[0] != base_version(plugin) or (force and installed is not None and current_hash(installed, host) not in (baseline, entry["managed_hash"] if entry else baseline))
+                active = apply_user_variant(host, plugin, variant, installed, refresh=needs_refresh)
+                managed = current_hash(active, host)
+                state["installs"][state_key(host, plugin.name)] = user_state_entry(host, plugin, variant, baseline, managed, commit)
+                write_user_state(state)
+                console.print(f"[green]已设置[/green] {host}:{plugin.name} -> {variant}")
+    if repository_status() != before_status:
+        raise InstallError("安装过程改变了 ruokee-skills 工作树；状态已保留，请先检查差异")
+
+
+def selected_user_entries(document: dict[str, Any], names: tuple[str, ...], hosts: tuple[str, ...]) -> list[tuple[str, str, dict[str, Any]]]:
+    selected_names = set(names)
+    result = []
+    for key, entry in document["installs"].items():
+        if entry["host"] in hosts and (not selected_names or entry["plugin"] in selected_names):
+            result.append((entry["host"], entry["plugin"], entry))
+    result.sort(key=lambda item: (HOSTS.index(item[0]), item[1]))
+    if names:
+        missing = sorted(name for name in selected_names if not any(item[1] == name for item in result))
+        if missing:
+            raise InstallError(f"没有找到所选宿主中的托管用户安装：{', '.join(missing)}")
+    if not result:
+        raise InstallError("没有可处理的托管用户安装")
+    return result
+
+
+def update_user(names: tuple[str, ...], all_plugins: dict[str, Plugin], hosts: tuple[str, ...], force: bool) -> None:
+    check_host_versions(hosts)
+    before_status = repository_status()
+    with operation_lock("user"):
+        state = read_user_state()
+        entries = selected_user_entries(state, names, hosts)
+        preflight = []
+        for host, name, entry in entries:
+            plugin = all_plugins.get(name)
+            if plugin is None:
+                raise InstallError(f"状态中的插件已不在仓库：{name}")
+            validate_task_source_runtime(plugin)
+            variant = variant_for(plugin, entry["variant"])
+            baseline = baseline_hash(plugin, host)
+            installed = native_status(host, plugin)
+            verify_drift(plugin, host, installed, entry, baseline, force)
+            preflight.append((host, plugin, variant, baseline, installed))
+
+        commit, _ = repository_state()
+        for host, plugin, variant, baseline, installed in preflight:
+            active = apply_user_variant(host, plugin, variant, installed, refresh=host in ("codex", "claude"))
+            managed = current_hash(active, host)
+            state["installs"][state_key(host, plugin.name)] = user_state_entry(host, plugin, variant, baseline, managed, commit)
+            write_user_state(state)
+            console.print(f"[green]已更新[/green] {host}:{plugin.name} -> {variant}")
+    if repository_status() != before_status:
+        raise InstallError("更新过程改变了 ruokee-skills 工作树；状态已保留，请先检查差异")
+
+
+def remove_managed_pi_package(plugin: Plugin) -> None:
+    path = managed_pi_package(plugin)
+    if not path.exists():
+        return
+    parent = user_data_root() / "packages"
+    if not path_within(path, parent) or path.is_symlink():
+        raise InstallError(f"拒绝删除未验证的 Pi 受管 Package：{path}")
+    tombstone = Path(tempfile.mkdtemp(prefix=f".{plugin.name}.ruokee-skills-remove-", dir=parent))
+    tombstone.rmdir()
+    os.replace(path, tombstone)
+    remove_path(tombstone)
+
+
+def reset_user(names: tuple[str, ...], all_plugins: dict[str, Plugin], hosts: tuple[str, ...], force: bool) -> None:
+    check_host_versions(hosts)
+    before_status = repository_status()
+    with operation_lock("user"):
+        state = read_user_state()
+        entries = selected_user_entries(state, names, hosts)
+        preflight = []
+        for host, name, entry in entries:
+            plugin = all_plugins.get(name)
+            if plugin is None:
+                raise InstallError(f"状态中的插件已不在仓库：{name}")
+            validate_task_source_runtime(plugin)
+            baseline = baseline_hash(plugin, host)
+            installed = native_status(host, plugin)
+            verify_drift(plugin, host, installed, entry, baseline, force)
+            preflight.append((host, plugin, installed))
+
+        for host, plugin, installed in preflight:
+            if host in ("codex", "claude"):
+                active = apply_user_variant(host, plugin, plugin.default_variant, installed, refresh=True)
+                if current_hash(active, host) != baseline_hash(plugin, host):
+                    raise InstallError(f"{host}:{plugin.name} reset 后不是当前 default")
+            else:
+                active = apply_user_variant(host, plugin, plugin.default_variant, installed, refresh=False)
+                if current_hash(active, host) != baseline_hash(plugin, host):
+                    raise InstallError(f"Pi:{plugin.name} reset 后不是当前 default Package")
+                remove_managed_pi_package(plugin)
+            del state["installs"][state_key(host, plugin.name)]
+            write_user_state(state)
+            console.print(f"[green]已重置[/green] {host}:{plugin.name} -> {plugin.default_variant}")
+    if repository_status() != before_status:
+        raise InstallError("reset 过程改变了 ruokee-skills 工作树；状态已保留，请先检查差异")
+
+
+def normalize_project(raw: Path | None) -> Path:
+    if raw is None:
+        raise InstallError("project scope 必须显式提供 --project")
+    absolute = raw.expanduser().absolute()
+    if absolute == Path("/") or absolute.resolve() == REPO_ROOT.resolve():
+        raise InstallError("拒绝把根目录或 ruokee-skills 自身作为消费项目")
+    if absolute.resolve() != absolute:
+        raise InstallError(f"消费项目路径不能经过符号链接：{absolute}")
+    info = absolute.lstat() if absolute.exists() else None
+    if info is None or not stat.S_ISDIR(info.st_mode) or not os.access(absolute, os.W_OK | os.X_OK):
+        raise InstallError(f"消费项目必须是存在且可写的普通目录：{absolute}")
+    return absolute
+
+
+def ensure_safe_target_parent(project: Path, parent: Path) -> None:
+    current = project
+    for part in parent.relative_to(project).parts:
+        current /= part
+        if not current.exists() and not current.is_symlink():
+            continue
+        info = current.lstat()
+        if not stat.S_ISDIR(info.st_mode):
+            raise InstallError(f"项目安装父路径不能是符号链接或普通文件：{current}")
+
+
+def project_targets(project: Path, plugin: Plugin, hosts: tuple[str, ...]) -> list[ProjectTarget]:
+    targets = []
+    shared = tuple(host for host in ("codex", "pi") if host in hosts)
+    if shared:
+        targets.append(ProjectTarget(project / ".agents" / "skills" / plugin.name, shared))
+    if "claude" in hosts:
+        targets.append(ProjectTarget(project / ".claude" / "skills" / plugin.name, ("claude",)))
+    return targets
+
+
+def validate_project_metadata(path: Path, value: Any, plugin: Plugin | None = None) -> dict[str, Any]:
+    if (
+        not isinstance(value, dict)
+        or set(value) != PROJECT_STATE_FIELDS
+        or type(value.get("schema_version")) is not int
+        or value.get("schema_version") != PROJECT_STATE_SCHEMA
+    ):
+        raise InstallError(f"项目托管元数据 schema 无效：{path}")
+    if value.get("plugin") != path.parent.name:
+        raise InstallError(f"项目托管元数据与目标目录名不匹配：{path}")
+    if plugin is not None and value.get("plugin") != plugin.name:
+        raise InstallError(f"项目托管元数据不属于目标插件：{path}")
+    hosts = value.get("hosts")
+    if not isinstance(hosts, list) or not hosts or any(host not in HOSTS for host in hosts) or len(hosts) != len(set(hosts)):
+        raise InstallError(f"项目托管元数据 hosts 无效：{path}")
+    host_root = path.parent.parent.parent.name
+    allowed_hosts = {"codex", "pi"} if host_root == ".agents" else {"claude"} if host_root == ".claude" else set()
+    if not set(hosts) <= allowed_hosts:
+        raise InstallError(f"项目托管元数据 hosts 与目标根不匹配：{path}")
+    for field in ("plugin", "variant", "source_commit", "installed_at", "updated_at"):
+        if not isinstance(value.get(field), str) or not value[field]:
+            raise InstallError(f"项目托管元数据 {field} 无效：{path}")
+    for field in ("baseline_hash", "managed_hash"):
+        if not isinstance(value.get(field), str) or HASH_PATTERN.fullmatch(value[field]) is None:
+            raise InstallError(f"项目托管元数据 {field} 无效：{path}")
+    return value
+
+
+def read_project_metadata(target: Path, plugin: Plugin | None = None) -> dict[str, Any] | None:
+    info = target.lstat() if target.exists() or target.is_symlink() else None
+    if info is None or not stat.S_ISDIR(info.st_mode):
+        return None
+    metadata = target / PROJECT_INSTALL_METADATA
+    metadata_info = metadata.lstat() if metadata.exists() or metadata.is_symlink() else None
+    if metadata_info is None:
+        return None
+    if not stat.S_ISREG(metadata_info.st_mode):
+        raise InstallError(f"项目托管元数据必须是普通文件：{metadata}")
+    try:
+        value = json.loads(metadata.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise InstallError(f"无法读取项目托管元数据 {metadata}：{exc}") from exc
+    return validate_project_metadata(metadata, value, plugin)
+
+
+def verify_project_drift(target: Path, metadata: dict[str, Any], force: bool) -> None:
+    current = directory_hash(target)
+    if current == metadata["managed_hash"] or force:
+        return
+    raise InstallError(f"项目 Skill 已发生漂移：{target}；使用 --force 仅可覆盖该有效托管目录")
+
+
+def project_metadata(plugin: Plugin, variant: str, hosts: tuple[str, ...], commit: str, baseline: str, managed: str, installed_at: str | None = None) -> dict[str, Any]:
+    timestamp = now_rfc3339()
+    return {
+        "schema_version": PROJECT_STATE_SCHEMA,
+        "plugin": plugin.name,
+        "variant": variant,
+        "hosts": [host for host in HOSTS if host in hosts],
+        "source_commit": commit,
+        "baseline_hash": baseline,
+        "managed_hash": managed,
+        "installed_at": installed_at or timestamp,
+        "updated_at": timestamp,
+    }
+
+
+def preflight_task_runtime(plugin: Plugin, hosts: tuple[str, ...]) -> None:
+    if plugin.name != "task":
+        return
+    for host in hosts:
+        validate_task_runtime(host, plugin, native_status(host, plugin))
+
+
+def setup_project(project: Path, plugins: list[Plugin], hosts: tuple[str, ...], requested_variant: str | None, force: bool) -> None:
+    check_host_versions(hosts)
+    with operation_lock("project", project):
+        preflight = []
+        for plugin in plugins:
+            variant = variant_for(plugin, requested_variant)
+            preflight_task_runtime(plugin, hosts)
+            baseline = materialized_hash(plugin, plugin.default_variant)
+            managed = materialized_hash(plugin, variant)
+            for target in project_targets(project, plugin, hosts):
+                ensure_safe_target_parent(project, target.path.parent)
+                existing = target.path.exists() or target.path.is_symlink()
+                metadata = read_project_metadata(target.path, plugin)
+                if existing and metadata is None:
+                    if not force:
+                        raise InstallError(f"目标已有非托管同名 Skill：{target.path}")
+                    console.print(f"[yellow]将替换非托管目标[/yellow] {target.path}")
+                if metadata is not None:
+                    verify_project_drift(target.path, metadata, force)
+                    old_hosts = tuple(metadata["hosts"])
+                    if metadata["variant"] != variant and not set(old_hosts) <= set(target.hosts):
+                        raise InstallError(f"{target.path} 同时服务未选宿主；切换变体时必须选择现有 hosts：{', '.join(old_hosts)}")
+                    combined_hosts = tuple(host for host in HOSTS if host in set(old_hosts) | set(target.hosts))
+                else:
+                    combined_hosts = target.hosts
+                preflight.append((plugin, variant, baseline, managed, target.path, combined_hosts, metadata))
+
+        commit, _ = repository_state()
+        for plugin, variant, baseline, managed, target, target_hosts, old_metadata in preflight:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            metadata = project_metadata(plugin, variant, target_hosts, commit, baseline, managed, old_metadata["installed_at"] if old_metadata else None)
+            install_skill(target, plugin, variant, metadata)
+            if directory_hash(target) != managed:
+                raise InstallError(f"项目 Skill 物化校验失败：{target}")
+            console.print(f"[green]已设置项目 Skill[/green] {target} -> {variant} ({', '.join(target_hosts)})")
+
+
+def discover_project_installs(project: Path, hosts: tuple[str, ...]) -> list[tuple[Path, dict[str, Any]]]:
+    roots = []
+    if "codex" in hosts or "pi" in hosts:
+        roots.append(project / ".agents" / "skills")
+    if "claude" in hosts:
+        roots.append(project / ".claude" / "skills")
+    result = []
+    for root in roots:
+        if not root.is_dir() or root.is_symlink():
+            continue
+        for child in sorted(root.iterdir()):
+            metadata = read_project_metadata(child)
+            if metadata is not None and set(metadata["hosts"]) & set(hosts):
+                result.append((child, metadata))
+    return result
+
+
+def selected_project_entries(project: Path, names: tuple[str, ...], hosts: tuple[str, ...]) -> list[tuple[Path, dict[str, Any]]]:
+    entries = discover_project_installs(project, hosts)
+    if names:
+        selected = set(names)
+        entries = [item for item in entries if item[1]["plugin"] in selected]
+        missing = sorted(name for name in selected if not any(item[1]["plugin"] == name for item in entries))
+        if missing:
+            raise InstallError(f"项目中没有所选宿主的托管 Skill：{', '.join(missing)}")
+    if not entries:
+        raise InstallError("项目中没有可处理的托管 Skill")
+    return entries
+
+
+def update_project(project: Path, names: tuple[str, ...], all_plugins: dict[str, Plugin], hosts: tuple[str, ...], force: bool) -> None:
+    check_host_versions(hosts)
+    with operation_lock("project", project):
+        entries = selected_project_entries(project, names, hosts)
+        preflight = []
+        for target, metadata in entries:
+            plugin = all_plugins.get(metadata["plugin"])
+            if plugin is None:
+                raise InstallError(f"项目状态中的插件已不在仓库：{metadata['plugin']}")
+            variant = variant_for(plugin, metadata["variant"])
+            verify_project_drift(target, metadata, force)
+            preflight_task_runtime(plugin, tuple(metadata["hosts"]))
+            preflight.append((target, metadata, plugin, variant, materialized_hash(plugin, plugin.default_variant), materialized_hash(plugin, variant)))
+
+        commit, _ = repository_state()
+        for target, old, plugin, variant, baseline, managed in preflight:
+            metadata = project_metadata(plugin, variant, tuple(old["hosts"]), commit, baseline, managed, old["installed_at"])
+            install_skill(target, plugin, variant, metadata)
+            if directory_hash(target) != managed:
+                raise InstallError(f"项目 Skill update 物化校验失败：{target}")
+            console.print(f"[green]已更新项目 Skill[/green] {target} -> {variant}")
+
+
+def remove_owned_directory(target: Path) -> None:
+    tombstone = Path(tempfile.mkdtemp(prefix=f".{target.name}.ruokee-skills-remove-", dir=target.parent))
+    tombstone.rmdir()
+    os.replace(target, tombstone)
+    remove_path(tombstone)
+    fsync_directory(target.parent)
+
+
+def reset_project(project: Path, names: tuple[str, ...], hosts: tuple[str, ...], force: bool) -> None:
+    check_host_versions(hosts)
+    with operation_lock("project", project):
+        entries = selected_project_entries(project, names, hosts)
+        preflight = []
+        for target, metadata in entries:
+            verify_project_drift(target, metadata, force)
+            selected = set(hosts) & set(metadata["hosts"])
+            remaining = tuple(host for host in HOSTS if host in set(metadata["hosts"]) - selected)
+            preflight.append((target, metadata, remaining))
+
+        for target, metadata, remaining in preflight:
+            if remaining:
+                updated = {**metadata, "hosts": list(remaining), "updated_at": now_rfc3339()}
+                write_json_atomic(target / PROJECT_INSTALL_METADATA, updated, mode=0o644)
+                console.print(f"[green]已解除宿主关联[/green] {target}；仍服务 {', '.join(remaining)}")
+            else:
+                remove_owned_directory(target)
+                console.print(f"[green]已删除项目 Skill[/green] {target}")
+
+
+def validate_scope(scope: str, project: Path | None) -> Path | None:
+    if scope == "project":
+        return normalize_project(project)
+    if project is not None:
+        raise InstallError("user scope 不接受 --project")
+    return None
+
+
+def common_options(function: Callable[..., Any]) -> Callable[..., Any]:
+    function = click.option("--force", is_flag=True, help="覆盖已验证的漂移，或在 setup 时替换明确的项目同名目标。")(function)
+    function = click.option("--host", "hosts", multiple=True, type=click.Choice(HOSTS), help="限定宿主，可重复；默认处理三个宿主。")(function)
+    function = click.option("--project", type=click.Path(path_type=Path), help="project scope 的显式消费项目路径。")(function)
+    function = click.option("--scope", required=True, type=click.Choice(("user", "project")), help="安装 scope，必须显式指定。")(function)
+    return function
+
+
+@click.group()
+def cli() -> None:
+    """管理 marketplace/Package 变体与项目 local Skill。"""
 
 
 @cli.command()
-@click.argument("resources", nargs=-1, required=True, metavar="RESOURCE...")
-@click.option("-v", "--variant", help="选择变体；一次安装多个资源时共同使用。")
-@click.option(
-    "-f", "--force", is_flag=True, help="覆盖现有目录，包括未受本工具管理的目录。"
-)
-@target_options
-def install(
-    resources: tuple[str, ...],
-    variant: str | None,
-    force: bool,
-    target: str | None,
-    root: Path | None,
-    global_install: bool,
-) -> None:
-    """安装一个或多个资源。"""
-    target, root, global_install = effective_target_options(
-        target, root, global_install
-    )
-    catalog = discover_resources()
-    selected = require_resources(catalog, resources)
-    resolved_root = destination_root(target, root, global_install)
-    for resource in selected:
-        destination = resolved_root / resource.name
-        metadata = (
-            read_metadata(destination) if destination.is_dir() and not force else None
-        )
-        if metadata is not None and not metadata_belongs_to(metadata, resource):
-            metadata = None
-        if destination.exists() and metadata is None and not force:
-            raise ResourceError(
-                f"{destination} 已存在且未受本工具管理；使用 --force 明确覆盖"
-            )
-        installed_variant = (
-            metadata.get("source", {}).get("variant") if metadata else None
-        )
-        chosen = choose_variant(resource, variant, installed_variant)
-        if destination.exists() and not force:
-            state = status_for(resource, target, resolved_root)
-            if state.state == "current" and state.variant == chosen.name:
-                console.print(f"[dim]跳过[/dim] {resource.name}：内容哈希一致")
-                continue
-            raise ResourceError(f"{resource.name} 已安装；请使用 update 或 change")
-        install_resource(resource, chosen, target, resolved_root)
-        console.print(
-            f"[green]✓[/green] 已安装 {resource.name} [dim]({chosen.name})[/dim]"
-        )
+@click.argument("plugins", nargs=-1, required=True)
+@click.option("--variant", help="目标变体；省略时使用插件 default。")
+@common_options
+def setup(plugins: tuple[str, ...], variant: str | None, scope: str, project: Path | None, hosts: tuple[str, ...], force: bool) -> None:
+    """安装原生用户入口并应用变体，或物化项目 local Skill。"""
+    try:
+        all_plugins = discover_plugins()
+        selected = require_plugins(plugins, all_plugins)
+        selected_hosts = normalized_hosts(hosts)
+        normalized_project = validate_scope(scope, project)
+        if scope == "user":
+            setup_user(selected, selected_hosts, variant, force)
+        else:
+            assert normalized_project is not None
+            setup_project(normalized_project, selected, selected_hosts, variant, force)
+    except RepositoryError as exc:
+        raise InstallError(str(exc)) from exc
 
 
 @cli.command()
-@click.argument("resources", nargs=-1, metavar="RESOURCE...")
-@click.option("-y", "--yes", is_flag=True, help="不询问，更新所有发现的变化。")
-@click.option("-v", "--variant", help="切换到指定变体。")
-@click.option("--reinstall", is_flag=True, help="重新安装当前变体，恢复仓库版本。")
-@target_options
-def update(
-    resources: tuple[str, ...],
-    yes: bool,
-    variant: str | None,
-    reinstall: bool,
-    target: str | None,
-    root: Path | None,
-    global_install: bool,
-) -> None:
-    """检查更新、切换变体，或重新安装资源。"""
-    target, root, global_install = effective_target_options(
-        target, root, global_install
-    )
-    catalog = discover_resources()
-    resolved_root = destination_root(target, root, global_install)
-    if variant and reinstall:
-        raise ResourceError("--variant 与 --reinstall 不能同时使用")
-    if (variant or reinstall) and not resources:
-        raise ResourceError("使用 --variant 或 --reinstall 时必须指定资源")
-    selected = (
-        require_resources(catalog, resources) if resources else list(catalog.values())
-    )
-
-    if variant or reinstall:
-        for resource in selected:
-            status = status_for(resource, target, resolved_root)
-            if status.state == "not_installed":
-                raise ResourceError(f"{resource.name} 尚未安装")
-            if status.state in ("unmanaged", "source_missing"):
-                raise ResourceError(
-                    f"无法更改 {resource.name}：{status.detail or '无法定位原变体'}"
-                )
-            chosen = choose_variant(resource, variant, status.variant)
-            install_resource(resource, chosen, target, resolved_root)
-            action = "已重新安装" if reinstall else "已切换"
-            console.print(
-                f"[green]✓[/green] {action} {resource.name} [dim]({chosen.name})[/dim]"
-            )
-        return
-
-    pending: list[tuple[Resource, InstallationStatus]] = []
-    for resource in selected:
-        status = status_for(resource, target, resolved_root)
-        if status.state == "not_installed":
-            if resources:
-                console.print(f"[dim]跳过[/dim] {resource.name}：尚未安装")
-            continue
-        if status.state == "current":
-            console.print(f"[dim]跳过[/dim] {resource.name}：内容哈希一致")
-            continue
-        if status.state in ("unmanaged", "source_missing"):
-            console.print(
-                f"[red]跳过[/red] {resource.name}：{status.detail or '无法定位原变体'}"
-            )
-            continue
-        pending.append((resource, status))
-    if not pending:
-        console.print("[green]没有需要更新的资源。[/green]")
-        return
-    table = Table(title="待更新资源", header_style="bold yellow")
-    table.add_column("资源")
-    table.add_column("变体")
-    table.add_column("变化")
-    for resource, status in pending:
-        change = "仓库内容已变化"
-        if status.state == "modified":
-            change = "安装目录被修改；将恢复仓库版本"
-        elif status.state == "update_and_modified":
-            change = "仓库与安装目录均有变化；本地修改将被覆盖"
-        table.add_row(resource.name, status.variant or "-", change)
-    console.print(table)
-    if not yes and not click.confirm("更新以上资源？", default=False):
-        raise click.Abort()
-    for resource, status in pending:
-        chosen = choose_variant(resource, status.variant)
-        install_resource(resource, chosen, target, resolved_root)
-        console.print(
-            f"[green]✓[/green] 已更新 {resource.name} [dim]({chosen.name})[/dim]"
-        )
+@click.argument("plugins", nargs=-1)
+@common_options
+def update(plugins: tuple[str, ...], scope: str, project: Path | None, hosts: tuple[str, ...], force: bool) -> None:
+    """从当前 checkout 重建并重放已记录的变体。"""
+    try:
+        all_plugins = discover_plugins()
+        if plugins:
+            require_plugins(plugins, all_plugins)
+        selected_hosts = normalized_hosts(hosts)
+        normalized_project = validate_scope(scope, project)
+        if scope == "user":
+            update_user(plugins, all_plugins, selected_hosts, force)
+        else:
+            assert normalized_project is not None
+            update_project(normalized_project, plugins, all_plugins, selected_hosts, force)
+    except RepositoryError as exc:
+        raise InstallError(str(exc)) from exc
 
 
 @cli.command()
-@click.argument("resources", nargs=-1, required=True, metavar="RESOURCE...")
-@click.option("-y", "--yes", is_flag=True, help="不询问，直接移除。")
-@target_options
-def remove(
-    resources: tuple[str, ...],
-    yes: bool,
-    target: str | None,
-    root: Path | None,
-    global_install: bool,
-) -> None:
-    """移除一个或多个由本工具安装的资源。"""
-    target, root, global_install = effective_target_options(
-        target, root, global_install
-    )
-    catalog = discover_resources()
-    selected = require_resources(catalog, resources)
-    resolved_root = destination_root(target, root, global_install)
-    removable: list[Resource] = []
-    for resource in selected:
-        destination = resolved_root / resource.name
-        if not destination.exists():
-            console.print(f"[dim]跳过[/dim] {resource.name}：尚未安装")
-            continue
-        metadata = (
-            None
-            if destination.is_symlink() or not destination.is_dir()
-            else read_metadata(destination)
-        )
-        if metadata is None or not metadata_belongs_to(metadata, resource):
-            raise ResourceError(f"拒绝移除未受本工具管理的目录：{destination}")
-        removable.append(resource)
-    if not removable:
-        return
-    names = "、".join(resource.name for resource in removable)
-    if not yes and not click.confirm(f"移除 {names}？", default=False):
-        raise click.Abort()
-    for resource in removable:
-        shutil.rmtree(resolved_root / resource.name)
-        console.print(f"[green]✓[/green] 已移除 {resource.name}")
+@click.argument("plugins", nargs=-1, required=True)
+@common_options
+def reset(plugins: tuple[str, ...], scope: str, project: Path | None, hosts: tuple[str, ...], force: bool) -> None:
+    """恢复用户 default 或删除已验证的项目 local Skill。"""
+    try:
+        all_plugins = discover_plugins()
+        require_plugins(plugins, all_plugins)
+        selected_hosts = normalized_hosts(hosts)
+        normalized_project = validate_scope(scope, project)
+        if scope == "user":
+            reset_user(plugins, all_plugins, selected_hosts, force)
+        else:
+            assert normalized_project is not None
+            reset_project(normalized_project, plugins, selected_hosts, force)
+    except RepositoryError as exc:
+        raise InstallError(str(exc)) from exc
 
 
 if __name__ == "__main__":

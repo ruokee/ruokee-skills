@@ -1,0 +1,10 @@
+{
+  "name": "stop-slop",
+  "version": "0.1.0",
+  "description": "Remove predictable AI writing patterns from English and Chinese prose",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills"
+}

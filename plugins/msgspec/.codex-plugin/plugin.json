@@ -1,0 +1,25 @@
+{
+  "name": "msgspec",
+  "version": "0.1.0",
+  "description": "Design fast typed validation and serialization with msgspec",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "msgspec",
+    "shortDescription": "Build fast typed serialization with msgspec.",
+    "longDescription": "Reference guidance and examples for msgspec Struct models, conversion, validation, JSON encoding, and tagged unions.",
+    "developerName": "Ruokee",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Design this validation and serialization flow with msgspec."
+    ]
+  }
+}

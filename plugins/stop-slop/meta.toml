@@ -1,0 +1,23 @@
+schema_version = 2
+classification = "fork"
+experimental = false
+package_root = "."
+
+[variants]
+default = "en"
+base = "skills/stop-slop"
+
+[upstream]
+repository = "https://github.com/amosblomqvist/pi-config"
+path = "skills/stop-slop"
+ref = "main"
+commit = "575a0a5261ada93cf09189ebd59a508040f866f9"
+imported_at = 2026-07-19
+updated_at = 2026-07-19
+mode = "merge"
+managed_paths = [
+  "SKILL.md",
+  "references/examples.md",
+  "references/phrases.md",
+  "references/structures.md",
+]

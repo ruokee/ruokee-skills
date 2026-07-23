@@ -1,0 +1,10 @@
+{
+  "name": "frontend-design",
+  "version": "0.1.0",
+  "description": "Create distinctive, intentional frontend designs grounded in the product brief",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills"
+}

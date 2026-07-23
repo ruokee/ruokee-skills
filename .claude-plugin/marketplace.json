@@ -7,11 +7,47 @@
   "plugins": [
     {
       "name": "task",
-      "source": "./experimential/task/package"
+      "source": "./plugins/task/package"
     },
     {
       "name": "with-agents",
-      "source": "./experimential/with-agents"
+      "source": "./plugins/with-agents"
+    },
+    {
+      "name": "code-quality",
+      "source": "./plugins/code-quality"
+    },
+    {
+      "name": "deep-research",
+      "source": "./plugins/deep-research"
+    },
+    {
+      "name": "frontend-design",
+      "source": "./plugins/frontend-design"
+    },
+    {
+      "name": "grill-me-plus",
+      "source": "./plugins/grill-me-plus"
+    },
+    {
+      "name": "msgspec",
+      "source": "./plugins/msgspec"
+    },
+    {
+      "name": "naming-guide",
+      "source": "./plugins/naming-guide"
+    },
+    {
+      "name": "ponytail",
+      "source": "./plugins/ponytail"
+    },
+    {
+      "name": "python-engineering",
+      "source": "./plugins/python-engineering"
+    },
+    {
+      "name": "stop-slop",
+      "source": "./plugins/stop-slop"
     }
   ]
 }

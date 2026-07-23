@@ -1,0 +1,26 @@
+{
+  "name": "grill-me-plus",
+  "version": "0.1.0",
+  "description": "Run research-first, dependency-aware reviews of consequential plans and decisions",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Grill Me Plus",
+    "shortDescription": "Systematically review plans, projects, and decisions.",
+    "longDescription": "A structured review process that resolves evidence, maps dependencies, records decisions, and asks focused questions until material issues are settled.",
+    "developerName": "Ruokee",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Systematically examine this plan before I act on it."
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "naming-guide",
+  "version": "0.1.0",
+  "description": "Explore, compare, and document names for products and software surfaces",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Naming Guide",
+    "shortDescription": "Explore names and record user decisions.",
+    "longDescription": "A neutral naming workflow for building context, exploring divergent directions, comparing tradeoffs, and recording confirmed decisions.",
+    "developerName": "Ruokee",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Explore naming directions for this project and compare the strongest candidates."
+    ]
+  }
+}

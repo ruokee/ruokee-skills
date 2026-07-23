@@ -8,7 +8,7 @@
       "name": "task",
       "source": {
         "source": "local",
-        "path": "./experimential/task/package"
+        "path": "./plugins/task/package"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -20,7 +20,115 @@
       "name": "with-agents",
       "source": {
         "source": "local",
-        "path": "./experimential/with-agents"
+        "path": "./plugins/with-agents"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "code-quality",
+      "source": {
+        "source": "local",
+        "path": "./plugins/code-quality"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "deep-research",
+      "source": {
+        "source": "local",
+        "path": "./plugins/deep-research"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "frontend-design",
+      "source": {
+        "source": "local",
+        "path": "./plugins/frontend-design"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "grill-me-plus",
+      "source": {
+        "source": "local",
+        "path": "./plugins/grill-me-plus"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "msgspec",
+      "source": {
+        "source": "local",
+        "path": "./plugins/msgspec"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "naming-guide",
+      "source": {
+        "source": "local",
+        "path": "./plugins/naming-guide"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "ponytail",
+      "source": {
+        "source": "local",
+        "path": "./plugins/ponytail"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "python-engineering",
+      "source": {
+        "source": "local",
+        "path": "./plugins/python-engineering"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "stop-slop",
+      "source": {
+        "source": "local",
+        "path": "./plugins/stop-slop"
       },
       "policy": {
         "installation": "AVAILABLE",

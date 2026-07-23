@@ -1,0 +1,25 @@
+{
+  "name": "python-engineering",
+  "version": "0.1.0",
+  "description": "Design and review maintainable Python projects, tooling, typing, and tests",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Python Engineering",
+    "shortDescription": "Guide Python project engineering and reviews.",
+    "longDescription": "Python-specific guidance for project layout, dependency policy, typing, testing, linting, standard-library choices, and code review.",
+    "developerName": "Ruokee",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Review this Python project structure, conventions, tooling, and code."
+    ]
+  }
+}

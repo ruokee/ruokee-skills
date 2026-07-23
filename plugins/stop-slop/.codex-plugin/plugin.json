@@ -1,0 +1,25 @@
+{
+  "name": "stop-slop",
+  "version": "0.1.0",
+  "description": "Remove predictable AI writing patterns from English and Chinese prose",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Stop Slop",
+    "shortDescription": "Make prose direct, specific, and less formulaic.",
+    "longDescription": "Editing guidance for removing filler, passive voice, formulaic structures, artificial rhythm, and other recognizable AI writing patterns.",
+    "developerName": "Ruokee",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Edit this prose to remove predictable AI writing patterns."
+    ]
+  }
+}

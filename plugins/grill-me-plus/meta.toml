@@ -1,0 +1,21 @@
+schema_version = 2
+classification = "fork"
+experimental = false
+package_root = "."
+
+[variants]
+default = "en"
+base = "skills/grill-me-plus"
+
+[upstream]
+repository = "https://github.com/mattpocock/skills"
+path = "skills/in-progress/batch-grill-me"
+ref = "main"
+commit = "9603c1cc8118d08bc1b3bf34cf714f62178dea3b"
+imported_at = 2026-07-21
+updated_at = 2026-07-21
+mode = "merge"
+managed_paths = [
+  "SKILL.md",
+  "agents/openai.yaml",
+]

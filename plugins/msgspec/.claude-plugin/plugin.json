@@ -1,0 +1,10 @@
+{
+  "name": "msgspec",
+  "version": "0.1.0",
+  "description": "Design fast typed validation and serialization with msgspec",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills"
+}

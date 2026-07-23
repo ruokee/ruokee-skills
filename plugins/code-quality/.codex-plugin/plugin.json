@@ -1,0 +1,25 @@
+{
+  "name": "code-quality",
+  "version": "0.1.0",
+  "description": "Review code, tests, architecture, and agent configuration for maintainability",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Code Quality",
+    "shortDescription": "Review code quality, design tradeoffs, and refactoring.",
+    "longDescription": "Practical guidance for reviewing code and tests, evaluating design choices, identifying smells, and planning maintainable refactors.",
+    "developerName": "Ruokee",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Review this code for quality, design tradeoffs, and refactoring opportunities."
+    ]
+  }
+}

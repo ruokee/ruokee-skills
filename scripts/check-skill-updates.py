@@ -6,20 +6,18 @@ import datetime as dt
 import difflib
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import re
 import subprocess
 import sys
 import tempfile
-import tomllib
 from dataclasses import asdict, dataclass
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
+from repository import REPO_ROOT, Plugin, RepositoryError, discover_plugins
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-UPSTREAM_DOMAINS = ("third-party", "fork")
 GIT_TIMEOUT_SECONDS = 30
 HTTP_TIMEOUT_SECONDS = 20
 
@@ -40,7 +38,7 @@ class Skill:
     imported_at: str
     updated_at: str
     mode: str
-    local_root: str
+    local_root: Path
     managed_paths: tuple[str, ...]
 
 
@@ -84,85 +82,41 @@ def run_git(
         ) from exc
 
 
-def normalized_relative_path(value: str, field: str) -> str:
-    path = PurePosixPath(value)
-    if path.is_absolute() or ".." in path.parts or str(path) in ("", "."):
-        raise UpstreamError(f"{field} 必须是非空的安全相对路径：{value!r}")
-    return path.as_posix().strip("/")
-
-
-def load_skill(metadata: Path) -> Skill:
-    try:
-        data = tomllib.loads(metadata.read_text(encoding="utf-8"))
-        upstream = data["upstream"]
-        update = data["update"]
-    except (OSError, tomllib.TOMLDecodeError, KeyError) as exc:
-        raise UpstreamError(f"无法读取 {metadata.relative_to(REPO_ROOT)}：{exc}") from exc
-
-    if data.get("schema_version") != 1:
-        raise UpstreamError(f"{metadata.relative_to(REPO_ROOT)}: 仅支持 schema_version = 1")
-
-    required_upstream = {"repository", "path", "ref", "commit", "imported_at", "updated_at"}
-    required_update = {"mode", "local_root", "managed_paths"}
-    missing = sorted(required_upstream - upstream.keys())
-    missing.extend(f"update.{key}" for key in sorted(required_update - update.keys()))
-    if missing:
-        raise UpstreamError(
-            f"{metadata.relative_to(REPO_ROOT)}: 缺少字段 {', '.join(missing)}"
-        )
-
-    mode = update.get("mode")
-    if mode not in ("replace", "merge"):
-        raise UpstreamError(f"{metadata.relative_to(REPO_ROOT)}: update.mode 必须是 replace 或 merge")
-
-    raw_managed_paths = update["managed_paths"]
-    if not isinstance(raw_managed_paths, list):
-        raise UpstreamError(
-            f"{metadata.relative_to(REPO_ROOT)}: update.managed_paths 必须是数组"
-        )
-    managed_paths = tuple(
-        normalized_relative_path(str(value), "update.managed_paths")
-        for value in raw_managed_paths
-    )
-    if not managed_paths or len(managed_paths) != len(set(managed_paths)):
-        raise UpstreamError(
-            f"{metadata.relative_to(REPO_ROOT)}: update.managed_paths 必须非空且不能重复"
-        )
-
-    commit = str(upstream.get("commit", ""))
-    if not re.fullmatch(r"[0-9a-fA-F]{40}", commit):
-        raise UpstreamError(f"{metadata.relative_to(REPO_ROOT)}: upstream.commit 必须是完整 commit SHA")
-
-    repository = str(upstream["repository"]).rstrip("/")
+def load_skill(plugin: Plugin) -> Skill:
+    upstream = plugin.upstream
+    if upstream is None:
+        raise UpstreamError(f"{plugin.name} 没有 upstream 配置")
+    repository = upstream.repository.rstrip("/")
     github_repository_path(repository)
-    ref = str(upstream["ref"])
-    if not ref:
-        raise UpstreamError(f"{metadata.relative_to(REPO_ROOT)}: upstream.ref 不能为空")
-
     return Skill(
-        name=metadata.parent.name,
-        workspace=metadata.parent,
-        metadata=metadata,
+        name=plugin.name,
+        workspace=plugin.workspace,
+        metadata=plugin.workspace / "meta.toml",
         repository=repository,
-        upstream_path=normalized_relative_path(str(upstream["path"]), "upstream.path"),
-        ref=ref,
-        commit=commit.lower(),
-        imported_at=str(upstream["imported_at"]),
-        updated_at=str(upstream["updated_at"]),
-        mode=mode,
-        local_root=normalized_relative_path(str(update["local_root"]), "update.local_root"),
-        managed_paths=managed_paths,
+        upstream_path=upstream.path,
+        ref=upstream.ref,
+        commit=upstream.commit,
+        imported_at=upstream.imported_at.isoformat(),
+        updated_at=upstream.updated_at.isoformat(),
+        mode=upstream.mode,
+        local_root=plugin.base,
+        managed_paths=upstream.managed_paths,
     )
 
 
 def discover_skills() -> dict[str, Skill]:
     skills: dict[str, Skill] = {}
-    for domain in UPSTREAM_DOMAINS:
-        for metadata in sorted((REPO_ROOT / domain).glob("*/upstream.toml")):
-            skill = load_skill(metadata)
-            if skill.name in skills:
-                raise UpstreamError(f"Skill 名称重复：{skill.name}")
-            skills[skill.name] = skill
+    try:
+        plugins = discover_plugins()
+    except RepositoryError as exc:
+        raise UpstreamError(str(exc)) from exc
+    for plugin in plugins.values():
+        if plugin.upstream is None:
+            continue
+        skill = load_skill(plugin)
+        if skill.name in skills:
+            raise UpstreamError(f"Skill 名称重复：{skill.name}")
+        skills[skill.name] = skill
     return skills
 
 
@@ -219,7 +173,7 @@ class UpstreamSnapshot:
         self._cache: dict[tuple[str, str], bytes | None] = {}
         self.repository_path = github_repository_path(skill.repository)
 
-    def __enter__(self) -> UpstreamSnapshot:
+    def __enter__(self) -> "UpstreamSnapshot":
         return self
 
     def __exit__(self, *_: object) -> None:
@@ -386,8 +340,8 @@ def update_metadata(skill: Skill, latest: str) -> None:
         count=1,
     )
     updated, date_count = re.subn(
-        r'(?m)^updated_at\s*=\s*"[^"]+"\s*$',
-        f'updated_at = "{dt.date.today().isoformat()}"',
+        r"(?m)^updated_at\s*=\s*\d{4}-\d{2}-\d{2}\s*$",
+        f"updated_at = {dt.date.today().isoformat()}",
         updated,
         count=1,
     )
@@ -410,7 +364,7 @@ def command_update(skills: list[Skill]) -> int:
             for path in skill.managed_paths:
                 base = snapshot.blob(skill.commit, path)
                 remote = snapshot.blob(latest, path)
-                local_path = skill.workspace / skill.local_root / Path(path)
+                local_path = skill.local_root / Path(path)
                 local = local_path.read_bytes() if local_path.is_file() else None
 
                 if skill.mode == "replace" or local == base:
@@ -461,7 +415,7 @@ def main() -> int:
     try:
         skills = discover_skills()
         if not skills:
-            raise UpstreamError("没有找到 upstream.toml")
+            raise UpstreamError("plugins/*/meta.toml 中没有找到 [upstream]")
         if args.command in (None, "check"):
             return command_check(skills, getattr(args, "json", False))
         selected = select_skills(skills, args.skills)

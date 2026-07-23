@@ -1,0 +1,10 @@
+{
+  "name": "deep-research",
+  "version": "0.1.0",
+  "description": "Run structured evidence-first research with explicit claim boundaries",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills"
+}

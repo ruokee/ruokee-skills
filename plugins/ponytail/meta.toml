@@ -1,0 +1,18 @@
+schema_version = 2
+classification = "third-party"
+experimental = false
+package_root = "."
+
+[variants]
+default = "en"
+base = "skills/ponytail"
+
+[upstream]
+repository = "https://github.com/DietrichGebert/ponytail"
+path = "skills/ponytail"
+ref = "main"
+commit = "16f29800fd2681bdf24f3eb4ccffe38be3baec6b"
+imported_at = 2026-07-19
+updated_at = 2026-07-19
+mode = "replace"
+managed_paths = ["SKILL.md"]

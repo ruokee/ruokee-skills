@@ -1,0 +1,10 @@
+{
+  "name": "python-engineering",
+  "version": "0.1.0",
+  "description": "Design and review maintainable Python projects, tooling, typing, and tests",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills"
+}

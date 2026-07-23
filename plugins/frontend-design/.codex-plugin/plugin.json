@@ -1,0 +1,25 @@
+{
+  "name": "frontend-design",
+  "version": "0.1.0",
+  "description": "Create distinctive, intentional frontend designs grounded in the product brief",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Frontend Design",
+    "shortDescription": "Design interfaces with a specific visual point of view.",
+    "longDescription": "A design-led workflow for grounding interfaces in their subject, choosing deliberate typography and layout, and avoiding templated visual defaults.",
+    "developerName": "Ruokee",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Design and build a distinctive interface for this brief."
+    ]
+  }
+}

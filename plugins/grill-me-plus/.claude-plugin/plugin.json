@@ -1,0 +1,10 @@
+{
+  "name": "grill-me-plus",
+  "version": "0.1.0",
+  "description": "Run research-first, dependency-aware reviews of consequential plans and decisions",
+  "author": {
+    "name": "Ruokee",
+    "url": "https://github.com/ruokee"
+  },
+  "repository": "https://github.com/ruokee/ruokee-skills"
+}
