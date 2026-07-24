@@ -1,6 +1,6 @@
 # tmux Recovery for with-agents
 
-Read this only after the bundled controller cannot finish an event, `doctor` reports a backend problem, or a partial input needs manual recovery. Raw tmux bypasses observation credentials, ownership checks, the per-pane lock, argv records, and structured partial-stage reporting, so use it as a deliberate fallback rather than the normal path.
+Read this only after the bundled controller cannot finish an action, `doctor` reports a backend problem, or a partial input needs manual recovery. Raw tmux bypasses the per-pane lock and the structured partial-stage reporting, so reserve it for deliberate fallback.
 
 ## Contents
 
@@ -8,9 +8,9 @@ Read this only after the bundled controller cannot finish an event, `doctor` rep
 - [Resolve and inspect a pane](#resolve-and-inspect-a-pane)
 - [Recover a partial send](#recover-a-partial-send)
 - [Create a minimal backend by hand](#create-a-minimal-backend-by-hand)
-- [Recover multiline input](#recover-multiline-input)
-- [Inspect owned metadata](#inspect-owned-metadata)
+- [Paste a body by hand](#paste-a-body-by-hand)
 - [Close panes safely](#close-panes-safely)
+- [Reference routing](#reference-routing)
 
 ## Diagnose the server and socket
 
@@ -26,38 +26,38 @@ Then look at tmux without changing anything:
 command -v tmux
 tmux -V
 printf '%s\n' "TMUX=${TMUX:-<unset>}" "TMUX_PANE=${TMUX_PANE:-<unset>}"
-tmux list-sessions
 ```
 
-`$TMUX` has the form `socket_path,server_pid,session_index`. When it names the intended live server, use that exact socket instead of guessing from another client:
+`$TMUX` has the form `socket_path,server_pid,session_index`. The socket path itself may contain commas, so split the two trailing numeric fields off the right. Cutting at the first comma silently truncates a comma socket to a wrong path. When `$TMUX` names the intended live server, use that exact socket. Do not infer one from another client:
 
 ```bash
-socket_path="${TMUX%%,*}"
+rest="${TMUX%,*}"          # drop session_index
+socket_path="${rest%,*}"   # drop server_pid, keep the full socket path
 tmux -S "$socket_path" list-sessions
 tmux -S "$socket_path" display-message -p '#{socket_path}|#{pid}'
 ```
 
-If `$TMUX` is stale, do not silently redirect an input operation onto the default server. Find the intended server with the user or from a known exact socket, then rerun the controller command with `--socket PATH`.
+Every raw tmux command against this existing server carries this same `-S "$socket_path"`. Dropping it sends the command to tmux's default server, which may hold a different pane under the same `%id` — a silent wrong target for a capture, a paste, an Enter, or a `kill-pane`. If `$TMUX` is stale, do not silently redirect an input operation onto the default server. Find the intended server with the user or from a known exact socket, then rerun the controller command with `--socket PATH`.
 
 ## Resolve and inspect a pane
 
-List authoritative identities alongside discovery hints:
+List authoritative identities alongside discovery hints. A pane is located by socket + pane ID; the public name is the live `window_name`, and the pane PID and dead status are diagnostic fields only:
 
 ```bash
-tmux list-panes -a \
-  -F '#{pane_id}|#{session_name}:#{window_index}.#{pane_index}|#{pane_pid}|#{pane_current_command}|#{pane_current_path}|dead=#{pane_dead}|name=#{@with_agents_name}|run=#{@with_agents_run_id}'
+tmux -S "$socket_path" list-panes -a \
+  -F '#{pane_id}|#{session_name}:#{window_index}.#{pane_index}|#{pane_pid}|#{pane_current_command}|#{pane_current_path}|dead=#{pane_dead}|name=#{window_name}'
 ```
 
 Capture the real screen before any input:
 
 ```bash
 target="%3"
-tmux capture-pane -p -J -t "$target" -S -120
-tmux display-message -p -t "$target" \
-  '#{pane_id}|#{pane_pid}|#{pane_current_command}|#{pane_current_path}|dead=#{pane_dead}|status=#{pane_dead_status}'
+tmux -S "$socket_path" capture-pane -p -J -t "$target" -S -120
+tmux -S "$socket_path" display-message -p -t "$target" \
+  '#{pane_id}|#{pane_pid}|#{window_name}|#{pane_current_command}|#{pane_current_path}|dead=#{pane_dead}|status=#{pane_dead_status}'
 ```
 
-Names, titles, commands, paths, and window indexes are hints only. Refresh the pane ID and PID after any server restart, respawn, or layout change.
+Names, titles, commands, paths, and window indexes are hints only; split panes in one window share a `window_name`. Locate a pane by its socket and `%pane-id`; treat the PID and dead status as diagnostics, and refresh them after any server restart, respawn, or layout change.
 
 ## Recover a partial send
 
@@ -70,77 +70,71 @@ When `send` reports `text_written_not_submitted`, the text may be sitting in the
 Submit-only recovery after a positive inspection:
 
 ```bash
-tmux capture-pane -p -J -t "$target" -S -40
-tmux send-keys -t "$target" Enter
+tmux -S "$socket_path" capture-pane -p -J -t "$target" -S -40
+tmux -S "$socket_path" send-keys -t "$target" Enter
 ```
 
 `submitted_state_unknown` means tmux may already have delivered both the text and the submit key. Read the pane; never replay automatically.
 
-For a plain shell or a positively confirmed empty Agent composer, literal single-line input is:
-
-```bash
-tmux send-keys -t "$target" -l -- "$message"
-tmux send-keys -t "$target" Enter
-```
-
-This manual pair is outside the normal Skill workflow and holds no shared controller lock. Do not run it concurrently with `with-agents`.
+To place fresh input into a plain shell or a positively confirmed empty Agent composer, use the same buffer-paste mechanism as [Paste a body by hand](#paste-a-body-by-hand). The `send-keys -l` path can truncate a long body. Any such manual step is outside the normal Skill workflow and holds no shared pane lock. Do not run it concurrently with `with-agents`.
 
 ## Create a minimal backend by hand
 
-`create` and `launch` normally start a missing detached server for you. When tmux itself must be diagnosed separately, make a minimal test session rather than editing personal configuration:
+`launch` normally starts a missing detached server for you. When tmux itself must be diagnosed separately, make a minimal test session on its own explicit socket so it never mixes with the server under investigation, and leave personal configuration unchanged:
 
 ```bash
+recovery_socket="/tmp/with-agents-recovery-$$.sock"
 session="with-agents-recovery"
-tmux new-session -d -s "$session" -n shell -c "$PWD"
-tmux list-panes -t "$session" \
+tmux -S "$recovery_socket" new-session -d -s "$session" -n shell -c "$PWD"
+tmux -S "$recovery_socket" list-panes -t "$session" \
   -F '#{pane_id}|#{session_name}:#{window_index}.#{pane_index}|#{pane_current_path}'
 ```
 
-Do not download or overwrite `~/.tmux.conf` for this Skill. The controller never changes server-level options or the pane key mode. Pi and Codex pane notification use ordinary `Enter` for both safe idle and safe busy states, so neither depends on `extended-keys`, `extended-keys-format=csi-u`, or `pane_key_mode=Ext 2`. `doctor` still reports the server's `extended_keys` and `extended_keys_format` values, but only as informational tmux facts, not as a notification prerequisite. If you want to inspect them anyway:
+Drive every command for this recovery backend with the same `-S "$recovery_socket"`; do not fall back to the default server.
+
+Do not download or overwrite `~/.tmux.conf` for this Skill. The controller never changes server-level options or the pane key mode, and submission is a plain buffer paste plus ordinary `Enter`, so nothing depends on `extended-keys`, `extended-keys-format=csi-u`, or `pane_key_mode=Ext 2`. `doctor` does not read or report these options; if you want to inspect them yourself:
 
 ```bash
-tmux show-options -s -v extended-keys
-tmux show-options -s -v extended-keys-format
+tmux -S "$socket_path" show-options -s -v extended-keys
+tmux -S "$socket_path" show-options -s -v extended-keys-format
 ```
 
-## Recover multiline input
+## Paste a body by hand
 
-Unknown adapters deliberately reject multiline `send`. When a target CLI has independently documented bracketed-paste support and manual recovery is in scope, use a unique buffer:
+`send` always pastes through a buffer, so manual recovery uses the same mechanism with a unique buffer name:
 
 ```bash
 buffer_name="with-agents-recovery-$$-$(date +%s)"
-printf '%s' "$message" | tmux load-buffer -b "$buffer_name" -
-tmux paste-buffer -p -b "$buffer_name" -d -t "$target"
-tmux capture-pane -p -J -t "$target" -S -40
+printf '%s' "$message" | tmux -S "$socket_path" load-buffer -b "$buffer_name" -
+tmux -S "$socket_path" paste-buffer -p -b "$buffer_name" -d -t "$target"
+tmux -S "$socket_path" capture-pane -p -J -t "$target" -S -40
 ```
 
-Inspect the pending composer before sending its submit key. `paste-buffer -p` is not runtime proof that the application supports bracketed paste; that support must come from the target adapter or the CLI's own documentation.
-
-## Inspect owned metadata
-
-The controller keeps only short, non-secret routing metadata in tmux pane options:
-
-```bash
-tmux show-options -p -t "$target" | \
-  grep -E '@with_agents_(owner|run_id|name|preset)'
-```
-
-Exact argv and observation or request state live in the private runtime root that `doctor` reports. Do not edit those files to bypass an identity or ownership error. A mismatched record usually means the pane was respawned, the server changed, or state expired — establish a new observation or launch a new owned run instead.
+Inspect the pending composer before sending its submit key. Bracketed-paste support comes from the target CLI's behavior; `paste-buffer -p` provides no runtime evidence of it.
 
 ## Close panes safely
 
-Capture final output and confirm exact ownership before closing anything:
+Capture final output and confirm the exact identity before closing anything:
 
 ```bash
-tmux capture-pane -p -J -t "$target" -S -200
-tmux display-message -p -t "$target" \
-  '#{pane_id}|#{session_name}:#{window_index}.#{pane_index}|owner=#{@with_agents_owner}|run=#{@with_agents_run_id}|dead=#{pane_dead}'
+tmux -S "$socket_path" capture-pane -p -J -t "$target" -S -200
+tmux -S "$socket_path" display-message -p -t "$target" \
+  '#{pane_id}|#{session_name}:#{window_index}.#{pane_index}|#{window_name}|dead=#{pane_dead}'
 ```
 
-Close only the exact pane the current task owns or that the user explicitly selected:
+Close only the exact pane the current task created or that the user explicitly selected:
 
 ```bash
-tmux kill-pane -t "$target"
+tmux -S "$socket_path" kill-pane -t "$target"
 ```
 
-Never reach for `kill-server`, `kill-session`, or `kill-window` as a broad recovery shortcut. Preserve live, waiting, retrying, and user-owned panes until their enclosing task and any review work are complete.
+Never reach for `kill-server`, `kill-session`, or `kill-window` as a broad recovery shortcut. Preserve live, waiting, retrying, and user panes until their enclosing task and any review work are complete.
+
+## Reference routing
+
+- [cli.md](cli.md) — the command index, global options, the JSON envelope, and representative error codes.
+- [messaging.md](messaging.md) — the send header grammar, params, and replying.
+- [operation-states.md](operation-states.md) — the send input stages and the no-blind-replay rule this recovery follows.
+- [panes-and-lifecycle.md](panes-and-lifecycle.md) — TARGET resolution, the live window name, the route grammar, and self-target.
+- [presets.md](presets.md) — preset schema, pane naming, and the private Agent registry.
+- [adapters.md](adapters.md) — per-CLI clear-input and new-conversation differences.

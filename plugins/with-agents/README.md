@@ -2,9 +2,7 @@
 
 ## 用途
 
-`with-agents` 教会当前 Agent 如何发现、启动、读取和操作外部 Agent CLI，适用于用户明确指定外部 CLI、已有 Agent pane、tmux 交互或需要持久保留的外部 Agent 工作。
-
-它将外部 Agent CLI 作为普通交互式终端程序，只使用 tmux 作为中间层。当前 harness 的原生 subagent 能完成普通委派时优先使用原生能力；仅当用户明确指定外部 CLI、tmux 或本 Skill 时才使用本模块。
+`with-agents` 为外部 Agent CLI 提供一层 tmux 交互包装：发现或启动 pane、读取画面、发送带回复地址的消息，以及管理 pane 生命周期。用户明确指定 with-agents、某个外部 CLI、tmux 或现有 pane，或者当前 harness 缺少所需模型时使用；普通委派优先使用 harness 原生 subagent。
 
 ## 树结构
 
@@ -12,39 +10,36 @@
 plugins/with-agents/
 ├── .codex-plugin/plugin.json
 ├── .claude-plugin/plugin.json
+├── CHANGELOG.md
 ├── meta.toml                  # 安装器 meta-v2 入口
-├── skills/with-agents/        # 完整英文 base，也是唯一规范 Skill 源
+├── skills/with-agents/        # 完整英文 base，也是规范 Skill 源
 │   ├── agents/openai.yaml
-│   ├── references/           # CLI、preset、消息、状态、pane、adapter 与 tmux 恢复
+│   ├── references/            # CLI、消息、状态、pane、preset 与 tmux 恢复
 │   ├── scripts/
-│   │   ├── launch-agent      # with-agents launch 的薄 shortcut
-│   │   └── with-agents       # 统一控制器（正常操作入口）
+│   │   └── with-agents        # 标准库单文件 controller
 │   └── SKILL.md
 ├── variants/zh/               # 相对 Skill 根的稀疏中文 overlay
 │   ├── agents/openai.yaml
 │   ├── references/
 │   └── SKILL.md
 ├── tests/
-│   ├── fixtures/
-│   │   └── mock_agent.py
+│   ├── fixtures/mock_agent.py
 │   └── test_with_agents.py
 └── README.md
 ```
 
 ## 语言变体
 
-- `skills/with-agents/` 是完整英文 base，所有命令行行为和语义以它为准。
-- `variants/zh/` 只保存可翻译文件；安装器将它覆盖到英文 base 上，物化完整中文 Skill。
-- `scripts/with-agents` 和 `scripts/launch-agent` 只在英文 base 中保留一份，中文变体直接继承，因此两种物化结果的可执行文件逐字节一致。
-- 私有 preset 位于用户配置目录 `${XDG_CONFIG_HOME:-~/.config}/with-agents/presets/` 中，**不在本仓库内**。
-- Agent 类型注册表位于 `${XDG_CONFIG_HOME:-~/.config}/with-agents/config.json`；它只影响需要 registry 的命名与 generic callback 能力，不替代代码内置的 Codex/Pi capability adapter。
+- `skills/with-agents/` 是完整英文 base，命令行合同以它为准。
+- `variants/zh/` 只保存可翻译文件；安装器将 overlay 覆盖到英文 base，物化完整中文 Skill。
+- controller 只保留一份，中文变体直接继承，因此两种物化结果的可执行文件逐字节一致。
+- 私有 preset 位于 `${XDG_CONFIG_HOME:-~/.config}/with-agents/presets/`，Agent registry 位于同级 `config.json`。仓库不保存用户模型、凭据或私有 argv。
 
-## 安装路径
+## 安装
 
-Codex 和 Claude marketplace 暴露 default 英文 Skill，Pi 直接安装本地 package 路径：
+Codex 和 Claude marketplace 暴露英文 Skill，Pi 安装本地 package：
 
 ```bash
-# 先分别注册本仓库 marketplace。
 codex plugin marketplace add /path/to/ruokee-skills
 codex plugin add with-agents@ruokee-skills
 
@@ -54,37 +49,62 @@ claude plugin install with-agents@ruokee-skills --scope user
 pi install /path/to/ruokee-skills/plugins/with-agents
 ```
 
-选择中文变体时，从仓库根目录使用安装器：
+选择中文变体时，从仓库根运行：
 
 ```bash
 uv run scripts/install.py setup with-agents --scope user --variant zh
 ```
 
-安装器不会另装一份 standalone Skill，而是验证或完成宿主原生安装，并在同一个 plugin/Package 入口应用 overlay。Plugin 安装使用宿主 cache，不是源码 live mount；宿主更新可能暂时恢复 default，再运行 `uv run scripts/install.py update with-agents --scope user` 会重放已记录变体。
+宿主会把插件复制到 cache，不会 live mount 源码。宿主更新后若恢复英文 default，运行 `uv run scripts/install.py update with-agents --scope user` 重放已记录的中文 overlay。
 
-## 操作方式
+## 0.3 操作合同
 
-所有正常操作通过统一的 `scripts/with-agents` 控制器完成。`scripts/launch-agent` 是 `with-agents launch` 的薄 shortcut，接受相同选项。
+公共命令只有 `read`、`send`、`list`、`launch`、`wait`、`key`、`close`、`preset`、`doctor` 和 `route`；版本通过 `with-agents --version` 查看。
 
-`send` 只提交消息，不创建 ticket；`request` 创建 v2 异步 event stream，允许 child 追加 `progress`、`question`，并以 `done`、`blocked` 或 `failed` 封口。request 提交后 caller 应释放 turn，以 spool 中按 `seq` 排序的事件为权威结果，不用 `read`、`wait` 或 `inbox` 建立轮询循环。
+pane 命令接受四种 TARGET：`%pane-id`、实时 `window_name`、`session:window.pane` 或 with-agents route。public `name` 始终来自当前 tmux window；split panes 共享 name，因此 pane ID 才是精确定位字段。唯一 canonical route 始终包含实时 name、decimal pane ID 和 canonical absolute socket，例如 `with-agents:tmux?name=cx-wa&pane_id=76&socket=/tmp/tmux-1000/default`。所有公共 pane 结果和默认消息 header 都返回该完整 route；`list --detail` 只增加诊断字段。带 with-agents 前缀但缺少 socket 的输入无效，裸 name、`%pane-id` 和 `session:window.pane` 仍是当前 server 内的 TARGET 便捷写法。
 
-控制器统一管理 pane 生命周期、观察凭据、event 持久化和尽力 callback；不使用过时的 `tmux-bridge`、`tmux-setup` 或拷贝自 smux 的脚本。原生 tmux 仅作为故障恢复入口——仅在控制器不可用、`doctor` 报告后端问题或需要手工恢复部分输入时，才参考 `references/tmux-recovery.md`。
+默认 `send` 从 `$TMUX` 和 `$TMUX_PANE` 取得发送方地址，并提交一条完整输入：
 
-## 撰写与设计边界
-
-以下内容约束本 Skill 的撰写和维护范围，不写入可安装的 `SKILL.md`：
-
-- 不预设 Agent 的固定角色、层级或任务类型；这些由当次请求决定。
-- 不要求安装额外 broker、daemon 或 MCP server，也不定义通用的结果协议或跨任务编排状态。
-- 不覆盖当前 harness、用户或目标 CLI 已有的配置和权限。
-- 不把 tmux session 或 pane 描述为 sandbox；tmux 只是终端中间层。
-- Agent 仍在执行、等待或自动重试时持续保留其 pane，不以固定等待时长或重试次数作为退出条件。
-- 创建的 pane 保留到外层任务或 goal 完全结束；预先存在的用户 pane 不自动关闭。
-
-## 运行测试
-
-```bash
-python -B -m unittest discover -s plugins/with-agents/tests
+```text
+[with-agents:tmux?name=cx-wa&pane_id=76] MESSAGE
 ```
 
-测试验证 meta-v2 物化、preset 与 Agent config、v1/v2 request 共存、event 顺序与资源预算、pane 身份变更、callback adapter 和共享脚本等核心合同。
+`--request` 在 sender route 中加入 `reply=required` 和 8 位 correlation ID；`--correlation-id` 可在普通回信中复用已有 ID；`--params` 接受严格的 `{string: string}` JSON object。接收方先读取 header route，再用普通 `send ROUTE --correlation-id ID -- MESSAGE` 回信。route 中已有的 params 只供接收方阅读，不参与寻址，也不会传播到下一条消息。发送 CLI 自身的 `/new`、`/clear`、授权回答或明确的 shell 输入时使用 `--no-header`。
+
+`send` 在 pane lock 内执行一次 `paste-buffer -p` 和一次 Enter，同一 pane 的 controller 操作因此串行。目标是否把带换行的正文解释成一个 composer value 取决于其 bracketed-paste 支持；controller 不把一次 paste 扩大为目标级“一次提交”保证。lock 释放后 controller 做一次有界画面观察；普通文本输出就是动作后的 snapshot，JSON 只补充 tmux 动作状态和实际构造的消息 metadata，不声称目标 Agent 已接受或开始处理。
+
+`launch --preset PRESET` 是常规启动路径。临时 direct argv 在新 window 中使用 `launch --name FULL -- ARGV...`，拆分现有 window 时使用 `launch --split TARGET -- ARGV...`。launch 默认观察画面相对 baseline 的实质变化：画面短暂稳定时立即返回，持续变化到 `--ready-timeout` 时返回最新 snapshot 和 `stable=false`，始终没有实质变化才报 `launch_timeout`；`--no-wait` 才立即返回，默认 timeout 为 120 秒。将稳定画面视为启动观察结果；它可能是 splash、授权或登录提示。发送任务前确认 composer ready。
+
+preset 只保存显式提供的 `agent_type`、可选 `pane_name` 和 argv，不保存 cwd，也不从 pane 或进程推断。缺省 pane name 按 Agent 的两字符 prefix 生成一次 `<prefix>-NNNN`。Agent registry 只配置 `pane_prefix`。
+
+pane 是实时状态。Agent 在任何变更前先 `list`/`read` 确认目标；controller 会在 pane lock 内再次复核地址，但不保存观察凭据，不检查 idle/busy，也不建立 ownership 或 foreground-process 权限层。唯一权限式 hard stop 是拒绝变更 caller 自己的 pane。
+
+## 从 0.2 升级
+
+0.3 不读取 0.2 的 request runtime、observation credential 或 launch record，也不提供兼容 shim。升级前先处理在途 request；确认不再需要后，可自行清理旧 runtime 中的 `requests/`、`observations/`、notification/event 数据和 pane records。
+
+以下入口与合同已删除：
+
+- `request`、`reply`、`inbox`、`gc`、`create`、`restart` 和 `version` 子命令；
+- `scripts/launch-agent`；
+- ticket、spool、event stream、notification callback 和 request route context；
+- run ID target、launch record、`@with_agents_*` metadata；
+- observation credential、owned/foreign gate、adapter capability gate；
+- preset 的 `--from`、cwd 与 executable inference。
+
+已有 `${XDG_CONFIG_HOME:-~/.config}/with-agents/config.json` 若包含 `executables`，需删除该字段；每个 Agent 定义现在只接受 `pane_prefix`。已符合 version 1 `agent_type`、`pane_name`、`argv` schema 的 0.2 preset 可继续读取；`pane_name` 在 0.3 变为可选，其他额外字段需删除。
+
+## 设计边界
+
+- 不预设 Agent 的角色、层级或任务类型。
+- 不安装 broker、daemon 或 MCP server，也不覆盖目标 CLI 的配置和权限。
+- tmux 不是 sandbox。显式向 shell pane 发送文字并按 Enter 可能执行命令。
+- Agent 仍在执行、等待或自动重试时保留 pane；外层任务和审查结束后再关闭本次创建的 pane。
+
+## 测试
+
+```bash
+python -B -m unittest plugins.with-agents.tests.test_with_agents
+```
+
+测试覆盖最终 CLI surface、canonical route 回喂、逗号 socket 与 self-target、tmux vis window name、跨 socket reply、bracketed-paste 边界、原子输入队列、wait、launch observation 与 compact result、显式 preset、private root 错误和中英文 overlay 结构。

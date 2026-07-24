@@ -1,6 +1,6 @@
 {
   "name": "with-agents",
-  "version": "0.2.0+codex.20260722165823",
+  "version": "0.3.0+codex.20260724110337",
   "description": "Operate external Agent CLIs through a deterministic tmux controller",
   "author": {
     "name": "Ruokee",

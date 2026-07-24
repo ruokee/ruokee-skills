@@ -1,4 +1,4 @@
 interface:
   display_name: "With Agents"
-  short_description: "Coordinate external Agent CLIs through a low-freedom tmux controller"
-  default_prompt: "Use $with-agents to launch, observe, and message an external Agent CLI through tmux."
+  short_description: "Launch, message, and manage external Agent CLIs over tmux"
+  default_prompt: "Use $with-agents to launch, read, message, and manage an external Agent CLI over tmux, and to reply to with-agents protocol messages."

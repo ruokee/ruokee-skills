@@ -1,6 +1,6 @@
 # with-agents CLI Contract
 
-The `cli.md` reference owns the invocation model, the global options, the exact command index, the frozen JSON envelope, and the representative error index. Each command's deeper behavior lives in a dedicated reference linked from the index below; this file does not restate those contracts.
+This reference owns the invocation model, the global options, the command index by frequency, the JSON envelope, and the representative error index. Each command's deeper behavior lives in a dedicated reference linked below; this file does not restate those contracts.
 
 ## Contents
 
@@ -8,7 +8,7 @@ The `cli.md` reference owns the invocation model, the global options, the exact 
 - [Command index](#command-index)
 - [The JSON envelope](#the-json-envelope)
 - [Representative error codes](#representative-error-codes)
-- [Where each contract lives](#where-each-contract-lives)
+- [Reference routing](#reference-routing)
 
 ## Invocation and global options
 
@@ -19,77 +19,78 @@ wa="<skill-root>/scripts/with-agents"
 "$wa" <command> ...
 ```
 
-The controller is a single standard-library Python file plus tmux. It requires Python 3.10+ and tmux 3.2+, reported by `doctor`. `scripts/launch-agent` is exactly `scripts/with-agents launch` and takes the same options.
+The controller is a single standard-library Python file plus tmux. It requires Python 3.10+ and tmux 3.2+, reported by `doctor`. Report the controller version with `with-agents --version`.
 
 Global options may appear before or right after a command:
 
 | Option | Meaning |
 | --- | --- |
-| `--json` | Emit the machine-readable envelope instead of the rendered text |
-| `--socket PATH` | Use this exact tmux socket rather than `$TMUX` or the default server |
-| `--caller-id ID` | Keep observation and caller-route identity distinct for concurrent callers outside tmux |
+| `--json` | Emit the machine-readable envelope |
+| `--socket PATH` | Override socket selection with this exact tmux socket |
 
-Inside tmux the controller inherits the exact socket from `$TMUX`. Outside tmux it uses the default server unless `--socket` is given. When no server exists, `create` and `launch` may start a minimal detached `with-agents` session. When a caller session cannot be resolved and several exist, `--session` or `--split` is required rather than a guess.
+Inside tmux the controller inherits the exact socket from `$TMUX`. Outside tmux it uses the default server unless `--socket` is given. When no server exists, `launch` may start a minimal detached session named `with_agents` (an underscore, so it is never confused with the `with-agents:` route scheme). An unresolved caller with several sessions requires `--session` or `--split`.
 
-`WITH_AGENTS_RUNTIME_DIR` and `WITH_AGENTS_CONFIG_DIR` override the runtime and config roots for isolated testing; do not point them at shared or untrusted directories.
+`WITH_AGENTS_RUNTIME_DIR` and `WITH_AGENTS_CONFIG_DIR` (or `--runtime-dir` / `--config-dir`) override the runtime and config roots for isolated testing; do not point them at shared or untrusted directories.
 
 ## Command index
 
+Commands are ordered by how often you reach for them. Every command that names a pane takes the same `TARGET` grammar — a `%pane-id`, a bare live `window_name`, an explicit `session:window.pane`, or a with-agents route — resolved the same way (see [panes-and-lifecycle.md](panes-and-lifecycle.md)).
+
 | Command | One-line contract | Detail |
 | --- | --- | --- |
-| `list` | List panes with stable targets, process hints, paths, ownership, names, and run IDs | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
-| `read TARGET [--lines N]` | Capture the current screen and record a caller-scoped observation | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
-| `create --name NAME [--cwd DIR] [--session S \| --split TARGET]` | Create an owned shell pane and observe it | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
-| `launch [--cwd DIR] [--session S \| --split TARGET] (--preset NAME [--name FULL \| --name-suffix SUFFIX] \| --name FULL -- ARGV...)` | Create an owned pane and launch an exact argv | [presets.md](presets.md), [panes-and-lifecycle.md](panes-and-lifecycle.md) |
-| `send TARGET [--allow-foreign] MESSAGE` | Write one complete message plus its submit key | [messaging.md](messaging.md), [operation-states.md](operation-states.md) |
-| `key TARGET [--allow-foreign] KEY...` | Send explicit tmux key names after an observation | [panes-and-lifecycle.md](panes-and-lifecycle.md), [operation-states.md](operation-states.md) |
-| `wait TARGET [--timeout S] [--interval S] [--lines N]` | Wait for one screen or process change, or until the timeout expires | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
-| `restart TARGET [--force-foreign] (--preset NAME \| -- ARGV...)` | Respawn a pane in place under a new run identity | [panes-and-lifecycle.md](panes-and-lifecycle.md), [operation-states.md](operation-states.md) |
-| `close TARGET [--lines N] [--force-foreign]` | Capture the final screen, then close the pane | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
-| `request TARGET [--allow-foreign] [--notify spool\|pane] [--reply-to TARGET [--reply-socket PATH]] [--reply-ttl SECONDS] MESSAGE` | Dispatch a task and open an asynchronous outcome stream | [messaging.md](messaging.md) |
-| `reply REQUEST_ID --status progress\|question\|done\|blocked\|failed [--message M] [--file PATH]` | Append one outcome event and optionally ring the caller | [messaging.md](messaging.md) |
-| `inbox [REQUEST_ID]` | List a caller's eventful requests, or one request's full event stream | [messaging.md](messaging.md) |
+| `read TARGET [--lines N]` | Capture the current screen | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
+| `send TARGET [--no-header] [--request] [--correlation-id ID] [--params JSON] -- MESSAGE` | Paste one complete body, press Enter, and return the latest screen | [messaging.md](messaging.md), [operation-states.md](operation-states.md) |
+| `list [--detail]` | List panes with stable targets, process hints, paths, live names, and a canonical socket-qualified route; `--detail` adds repair diagnostics | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
+| `launch [--cwd DIR] [--no-wait] [--ready-timeout S] [--session S \| --split TARGET] (--preset ... \| -- ARGV...)` | Create a pane and launch an exact argv, waiting for a readable startup screen | [presets.md](presets.md), [panes-and-lifecycle.md](panes-and-lifecycle.md) |
+| `wait TARGET [--timeout S] [--interval S] [--lines N]` | Wait for a screen change or the pane's process to exit or disappear, or until the timeout expires | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
+| `key TARGET -- KEY...` | Send explicit tmux key names and return the latest screen | [panes-and-lifecycle.md](panes-and-lifecycle.md), [operation-states.md](operation-states.md) |
+| `close TARGET [--lines N]` | Capture the final screen, then close the pane | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
 | `preset list \| show \| save \| update \| remove` | Manage private JSON launch presets | [presets.md](presets.md) |
-| `gc [--stale [DAYS]] [--delete-stale]` | Remove terminal request scratch, or inspect explicit stale requests | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
-| `doctor` | Report Python, tmux, runtime, notification-adapter, and agent-config diagnostics | [adapters.md](adapters.md) |
-| `version` | Report the controller version | — |
+| `doctor` | Report Python, tmux, runtime, and agent-config diagnostics | [presets.md](presets.md) |
+| `route [TARGET]` | Print a portable, socket-qualified route for the target, or for the caller when no argument is given | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
 
-`MESSAGE`, `ARGV`, and `KEY` are ordinary positional arguments. Place a `--` before them so text or an argv that begins with a dash is not read as an option. Run `"$wa" <command> --help` for exact placement.
+`MESSAGE`, `ARGV`, and `KEY` are ordinary positional arguments. Place a `--` before them so the parser accepts leading-dash text or argv as positional content. Run `"$wa" <command> --help` for exact placement.
+
+`launch` takes one of three forms, and the naming rule differs by form:
+
+- **Preset:** `launch --preset NAME [--name FULL | --name-suffix SUFFIX]` — the name is optional (it falls back to the preset's `pane_name` or a generated one).
+- **Non-split direct argv:** `launch --name FULL -- ARGV...` — `--name` is required, because a new window needs a name and there is no preset to fall back to.
+- **Split direct argv:** `launch --split TARGET -- ARGV...` — `--name`/`--name-suffix` must be omitted; the new pane inherits the target window's live name. See [presets.md](presets.md).
 
 ## The JSON envelope
 
 Default text output is rendered from the same data as `--json`. The top-level fields are always present, in this order:
 
 ```text
-ok, event, stage, target, request, notification, screen, error, recovery
+ok, event, stage, target, screen, error, recovery
 ```
 
 - `ok` is the success boolean; the process exit status matches it.
-- `event` is the command name; `stage` is the reached phase (for example `observed`, `submitted`, `outcome_persisted`, `listed`, `closed`).
-- `target` carries pane, preset, or diagnostic detail; `request` carries request/event/inbox detail; `notification` carries doorbell diagnostics; `screen` carries a bounded `{tail, lines}` capture.
+- `event` is the command name; `stage` is the reached phase (for example `observed`, `submitted`, `listed`, `closed`).
+- `target` carries pane, preset, route, or diagnostic detail; `screen` carries a bounded `{tail, lines}` capture.
 - `error` is `{code, message[, details]}` on failure, `null` otherwise; `recovery` is a one-line next step or `null`.
 
-Inapplicable fields are `null`. Command-specific values live inside `target` or `request`; no second top-level envelope family is added. Text and key results report `tmux_accepted` and `tui_acceptance: "unverified"` — the controller never claims a field it cannot prove, such as `delivered` or `accepted_by_tui`.
+Inapplicable fields are `null`. Command-specific values live inside `target`; there is no second top-level envelope family. For `send`, `target.message` describes only the input the controller constructed — the sender route it built, the final params, the correlation ID, and whether a header was used. `send` and `key` report the reached stage and the post-action screen; the controller never claims a field it cannot prove, such as `delivered` or `accepted_by_tui`.
 
 ## Representative error codes
 
-This index is representative, not an exhaustive enum. The owning reference defines each code's meaning and recovery.
+This index lists representative codes. The owning reference defines each code's meaning and recovery.
 
 | Code | Owner |
 | --- | --- |
-| `observation_required`, `observation_expired`, `target_identity_changed`, `foreign_write_denied`, `self_target_denied`, `target_process_exited`, `foreign_restart_denied`, `foreign_close_denied` | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
-| `submitted_state_unknown`, `key_state_unknown`, `multiline_not_safe`, `interrupted` | [operation-states.md](operation-states.md) |
+| `target_not_found`, `target_ambiguous`, `route_invalid`, `caller_identity_unavailable`, `self_target_denied`, `self_target_unverified`, `target_process_exited` | [panes-and-lifecycle.md](panes-and-lifecycle.md) |
+| `interrupted`, `post_action_observation_failed`, `launch_timeout`, `executable_not_found`, `launch_process_exited` | [operation-states.md](operation-states.md) |
+| `params_invalid`, `params_source_conflict` | [messaging.md](messaging.md) |
 | `pane_name_source_conflict`, `name_suffix_requires_preset`, `agent_prefix_not_configured`, `invalid_agent_config`, `preset_not_found`, `preset_exists`, `preset_secret_suspected`, `replace_required`, `launch_source_conflict` | [presets.md](presets.md) |
-| `reply_ticket_invalid`, `reply_stream_terminated`, `reply_event_limit`, `reply_result_budget_exhausted`, `reply_ticket_expired`, `already_replied`, `reply_route_invalid`, `invalid_reply_ttl`, `result_file_invalid`, `result_file_too_large` | [messaging.md](messaging.md) |
-| `notify_prerequisite_missing`, `tmux_unavailable`, `tmux_timeout`, `tmux_command_failed`, `lock_timeout` | [messaging.md](messaging.md), [adapters.md](adapters.md), [tmux-recovery.md](tmux-recovery.md) |
+| `tmux_unavailable`, `tmux_timeout`, `tmux_command_failed`, `lock_timeout` | [tmux-recovery.md](tmux-recovery.md) |
 
-Not every `stage` is an error code. `text_not_written`, `text_written_not_submitted`, and the lifecycle `*_state_unknown` values are partial `send`/mutation *stages* reported on the envelope's `stage` field; some of them (`submitted_state_unknown`, `key_state_unknown`) are also stable error codes when the operation fails at that point. See [operation-states.md](operation-states.md) for the full stage-versus-code distinction.
+`stage` and `code` are distinct. `text_not_written`, `text_written_not_submitted`, `submitted_state_unknown`, `key_state_unknown`, and the other `*_state_unknown` values are *stages* on the `stage` field — they describe how far an action reached. The `error.code` that accompanies a failed action is a separate value: a failed paste or submit surfaces as `tmux_command_failed`, `tmux_timeout`, or `interrupted` carrying the matching partial stage; a post-action capture failure is `post_action_observation_failed`. Do not treat a stage name as an error code. See [operation-states.md](operation-states.md) for the full stage-versus-code distinction.
 
-## Where each contract lives
+## Reference routing
 
-- [presets.md](presets.md) — preset and `config.json` schema, pane-name sources, Agent registration, secret guard.
-- [messaging.md](messaging.md) — `send`, and the `request`/`reply`/`inbox` asynchronous event stream.
-- [operation-states.md](operation-states.md) — every atomic operation's partial stages and no-blind-replay recovery.
-- [panes-and-lifecycle.md](panes-and-lifecycle.md) — identity, observation, ownership, locks, `gc`, and the pane lifecycle commands.
-- [adapters.md](adapters.md) — Agent/launcher detection, notification strategy, composer recognition, version diagnostics.
-- [tmux-recovery.md](tmux-recovery.md) — raw-tmux recovery when the controller cannot finish an event.
+- [messaging.md](messaging.md) — the send header grammar, params, the input queue, the post-action snapshot, and replying.
+- [operation-states.md](operation-states.md) — the three technical states, partial stages, and no-blind-replay recovery.
+- [panes-and-lifecycle.md](panes-and-lifecycle.md) — TARGET resolution, the live window name, the canonical route, the pane lock, launch/wait/close, and self-target.
+- [presets.md](presets.md) — preset and `config.json` schema, pane-name sources, Agent registration, and the secret guard.
+- [adapters.md](adapters.md) — per-CLI clear-input and new-conversation differences.
+- [tmux-recovery.md](tmux-recovery.md) — raw-tmux recovery when the controller cannot finish an action.
